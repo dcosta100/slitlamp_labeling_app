@@ -30,10 +30,26 @@ def load_all_data():
     diagnosis_df = pd.read_stata(DIAGNOSIS_PATH)
     diagnosis_df['exam_date'] = pd.to_datetime(diagnosis_df['exam_date'])
     
+    # Convert pat_mrn to string for consistent matching
+    if 'pat_mrn' in diagnosis_df.columns:
+        diagnosis_df['pat_mrn'] = diagnosis_df['pat_mrn'].astype(str).str.strip()
+    
     # Load notes data
     print("  - Loading notes data...")
     notes_df = pd.read_parquet(NOTES_PATH)
     notes_df['note_date'] = pd.to_datetime(notes_df['note_date'])
+    
+    # Convert pat_mrn to string for consistent matching
+    if 'pat_mrn' in notes_df.columns:
+        notes_df['pat_mrn'] = notes_df['pat_mrn'].astype(str).str.strip()
+    
+    # Filter for Progress Notes only
+    if 'ip_note_type' in notes_df.columns:
+        original_count = len(notes_df)
+        notes_df = notes_df[notes_df['ip_note_type'] == 'Progress Notes'].copy()
+        print(f"     Filtered to Progress Notes: {len(notes_df):,} / {original_count:,} ({100*len(notes_df)/original_count:.1f}%)")
+    else:
+        print("     Warning: 'ip_note_type' column not found - using all notes")
     
     # Load crosswalk data
     print("  - Loading crosswalk data...")
@@ -46,6 +62,12 @@ def load_all_data():
         annotations_df.rename(columns={'studyid': 'maskedid'}, inplace=True)
     if 'date' in annotations_df.columns:
         annotations_df['annotation_date'] = pd.to_datetime(annotations_df['date'])
+    
+    # Convert maskedid to string for consistent matching
+    if 'maskedid' in annotations_df.columns:
+        annotations_df['maskedid'] = annotations_df['maskedid'].astype(str).str.strip()
+    if 'maskedid' in cross_df.columns:
+        cross_df['maskedid'] = cross_df['maskedid'].astype(str).str.strip()
     
     print("All datasets loaded successfully!")
     return diagnosis_df, notes_df, cross_df, annotations_df
@@ -78,16 +100,32 @@ def add_notes_flags(merged_df, notes_df):
     """Add flag indicating if patient has matching notes"""
     print("\nCalculating notes matches...")
     
+    # Ensure pat_mrn is string in merged_df too
+    if 'pat_mrn' in merged_df.columns:
+        merged_df['pat_mrn'] = merged_df['pat_mrn'].astype(str).str.strip()
+    
     merged_df['has_notes'] = False
     merged_df['notes_count'] = 0
+    
+    # Debug: Check unique values
+    unique_mrns_merged = merged_df['pat_mrn'].dropna().nunique()
+    unique_mrns_notes = notes_df['pat_mrn'].dropna().nunique()
+    print(f"  Debug: Unique MRNs in merged: {unique_mrns_merged:,}")
+    print(f"  Debug: Unique MRNs in notes: {unique_mrns_notes:,}")
+    
+    # Find overlap
+    mrns_in_both = set(merged_df['pat_mrn'].dropna()) & set(notes_df['pat_mrn'].dropna())
+    print(f"  Debug: MRNs in both datasets: {len(mrns_in_both):,}")
     
     # Group notes by patient
     notes_by_patient = notes_df.groupby('pat_mrn')
     
     total = len(merged_df)
+    matches_found = 0
+    
     for idx, row in merged_df.iterrows():
         if idx % 10000 == 0:
-            print(f"  Processing row {idx}/{total} ({100*idx/total:.1f}%)")
+            print(f"  Processing row {idx:,}/{total:,} ({100*idx/total:.1f}%) - Matches so far: {matches_found:,}")
         
         pat_mrn = row.get('pat_mrn')
         exam_date = row.get('exam_date')
@@ -104,24 +142,41 @@ def add_notes_flags(merged_df, notes_df):
             if matching_notes > 0:
                 merged_df.at[idx, 'has_notes'] = True
                 merged_df.at[idx, 'notes_count'] = matching_notes
+                matches_found += 1
     
-    print(f"Found {merged_df['has_notes'].sum()} images with matching notes")
+    print(f"Found {merged_df['has_notes'].sum():,} images with matching notes ({100*merged_df['has_notes'].sum()/len(merged_df):.2f}%)")
     return merged_df
 
 def add_annotations_flags(merged_df, annotations_df):
     """Add flag indicating if image has matching annotations"""
     print("\nCalculating annotations matches...")
     
+    # Ensure maskedid is string in merged_df too
+    if 'maskedid' in merged_df.columns:
+        merged_df['maskedid'] = merged_df['maskedid'].astype(str).str.strip()
+    
     merged_df['has_annotations'] = False
     merged_df['annotations_count'] = 0
+    
+    # Debug: Check unique values
+    unique_ids_merged = merged_df['maskedid'].dropna().nunique()
+    unique_ids_annotations = annotations_df['maskedid'].dropna().nunique()
+    print(f"  Debug: Unique maskedids in merged: {unique_ids_merged:,}")
+    print(f"  Debug: Unique maskedids in annotations: {unique_ids_annotations:,}")
+    
+    # Find overlap
+    ids_in_both = set(merged_df['maskedid'].dropna()) & set(annotations_df['maskedid'].dropna())
+    print(f"  Debug: maskedids in both datasets: {len(ids_in_both):,}")
     
     # Group annotations by maskedid
     annotations_by_id = annotations_df.groupby('maskedid')
     
     total = len(merged_df)
+    matches_found = 0
+    
     for idx, row in merged_df.iterrows():
         if idx % 10000 == 0:
-            print(f"  Processing row {idx}/{total} ({100*idx/total:.1f}%)")
+            print(f"  Processing row {idx:,}/{total:,} ({100*idx/total:.1f}%) - Matches so far: {matches_found:,}")
         
         maskedid = row.get('maskedid')
         exam_date = row.get('exam_date')
@@ -138,8 +193,9 @@ def add_annotations_flags(merged_df, annotations_df):
             if matching_anns > 0:
                 merged_df.at[idx, 'has_annotations'] = True
                 merged_df.at[idx, 'annotations_count'] = matching_anns
+                matches_found += 1
     
-    print(f"Found {merged_df['has_annotations'].sum()} images with matching annotations")
+    print(f"Found {merged_df['has_annotations'].sum():,} images with matching annotations ({100*merged_df['has_annotations'].sum()/len(merged_df):.2f}%)")
     return merged_df
 
 def save_preprocessed_data(merged_df, output_path):

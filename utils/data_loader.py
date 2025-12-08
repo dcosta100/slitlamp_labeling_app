@@ -59,6 +59,24 @@ class DataLoader:
             if 'date' in _self.annotations_df.columns:
                 _self.annotations_df['annotation_date'] = pd.to_datetime(_self.annotations_df['date'])
             
+            # Convert pat_mrn to string for consistent matching
+            if 'pat_mrn' in _self.diagnosis_df.columns:
+                _self.diagnosis_df['pat_mrn'] = _self.diagnosis_df['pat_mrn'].astype(str).str.strip()
+            if 'pat_mrn' in _self.notes_df.columns:
+                _self.notes_df['pat_mrn'] = _self.notes_df['pat_mrn'].astype(str).str.strip()
+            
+            # Filter for Progress Notes only
+            if 'ip_note_type' in _self.notes_df.columns:
+                original_count = len(_self.notes_df)
+                _self.notes_df = _self.notes_df[_self.notes_df['ip_note_type'] == 'Progress Notes'].copy()
+                print(f"Filtered to Progress Notes: {len(_self.notes_df):,} / {original_count:,}")
+            
+            # Convert maskedid to string for consistent matching
+            if 'maskedid' in _self.annotations_df.columns:
+                _self.annotations_df['maskedid'] = _self.annotations_df['maskedid'].astype(str).str.strip()
+            if 'maskedid' in _self.cross_df.columns:
+                _self.cross_df['maskedid'] = _self.cross_df['maskedid'].astype(str).str.strip()
+            
             return True, "Data loaded successfully"
         except Exception as e:
             return False, f"Error loading data: {str(e)}"
@@ -82,6 +100,12 @@ class DataLoader:
                 self.merged_df = pd.read_parquet(PREPROCESSED_PATH)
                 print(f"   Loaded {len(self.merged_df):,} rows")
                 
+                # Convert pat_mrn and maskedid to string in merged_df for consistent matching
+                if 'pat_mrn' in self.merged_df.columns:
+                    self.merged_df['pat_mrn'] = self.merged_df['pat_mrn'].astype(str).str.strip()
+                if 'maskedid' in self.merged_df.columns:
+                    self.merged_df['maskedid'] = self.merged_df['maskedid'].astype(str).str.strip()
+                
                 # Still need to load notes and annotations for runtime lookups
                 # But we don't need diagnosis or cross since they're already in merged_df
                 if self.notes_df is None:
@@ -89,6 +113,14 @@ class DataLoader:
                         print("   Loading notes for runtime lookups...")
                         self.notes_df = pd.read_parquet(NOTES_PATH)
                         self.notes_df['note_date'] = pd.to_datetime(self.notes_df['note_date'])
+                        
+                        # Convert pat_mrn to string and filter Progress Notes
+                        if 'pat_mrn' in self.notes_df.columns:
+                            self.notes_df['pat_mrn'] = self.notes_df['pat_mrn'].astype(str).str.strip()
+                        if 'ip_note_type' in self.notes_df.columns:
+                            original_count = len(self.notes_df)
+                            self.notes_df = self.notes_df[self.notes_df['ip_note_type'] == 'Progress Notes'].copy()
+                            print(f"     Filtered to Progress Notes: {len(self.notes_df):,} / {original_count:,}")
                     except Exception as e:
                         print(f"   Warning: Could not load notes: {e}")
                 
@@ -100,6 +132,10 @@ class DataLoader:
                             self.annotations_df.rename(columns={'studyid': 'maskedid'}, inplace=True)
                         if 'date' in self.annotations_df.columns:
                             self.annotations_df['annotation_date'] = pd.to_datetime(self.annotations_df['date'])
+                        
+                        # Convert maskedid to string
+                        if 'maskedid' in self.annotations_df.columns:
+                            self.annotations_df['maskedid'] = self.annotations_df['maskedid'].astype(str).str.strip()
                     except Exception as e:
                         print(f"   Warning: Could not load annotations: {e}")
                 
