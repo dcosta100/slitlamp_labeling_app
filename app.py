@@ -108,10 +108,13 @@ def main():
                 # If filter changed, update and reload
                 if filter_mode != current_filter:
                     st.session_state.dataset_filter = filter_mode
-                    # Clear data loader to force reload with new filter
+                    # Force reload by deleting data_loader and route
                     if 'data_loader' in st.session_state:
-                        st.session_state.data_loader.filter_mode = filter_mode
                         del st.session_state.data_loader
+                    if 'route_indices' in st.session_state:
+                        del st.session_state.route_indices
+                    if 'current_position' in st.session_state:
+                        st.session_state.current_position = 0
                     st.rerun()
                 
                 st.caption(f"Current: {DATASET_FILTER_OPTIONS[filter_mode]}")

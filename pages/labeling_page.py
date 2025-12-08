@@ -31,10 +31,7 @@ def show():
         st.session_state.data_loader.filter_mode = filter_mode
         
         with st.spinner("Loading datasets..."):
-            success, message = st.session_state.data_loader.load_data()
-            if not success:
-                st.error(message)
-                return
+            # merge_datasets will handle loading (either preprocessed or regular)
             success, message = st.session_state.data_loader.merge_datasets()
             if not success:
                 st.error(message)

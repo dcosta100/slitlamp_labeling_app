@@ -66,23 +66,65 @@ class DataLoader:
     def merge_datasets(self):
         """Merge all datasets and apply filters"""
         
+        # Debug: Check preprocessing configuration
+        print("=" * 60)
+        print("DATASET LOADING DEBUG:")
+        print(f"  USE_PREPROCESSED: {USE_PREPROCESSED}")
+        print(f"  PREPROCESSED_PATH: {PREPROCESSED_PATH}")
+        if PREPROCESSED_PATH:
+            print(f"  File exists: {Path(PREPROCESSED_PATH).exists()}")
+        print("=" * 60)
+        
         # Try to load preprocessed dataset if enabled
         if USE_PREPROCESSED and PREPROCESSED_PATH and Path(PREPROCESSED_PATH).exists():
             try:
-                print(f"Loading preprocessed dataset from {PREPROCESSED_PATH}...")
+                print(f"✅ Loading preprocessed dataset from {PREPROCESSED_PATH}...")
                 self.merged_df = pd.read_parquet(PREPROCESSED_PATH)
+                print(f"   Loaded {len(self.merged_df):,} rows")
+                
+                # Still need to load notes and annotations for runtime lookups
+                # But we don't need diagnosis or cross since they're already in merged_df
+                if self.notes_df is None:
+                    try:
+                        print("   Loading notes for runtime lookups...")
+                        self.notes_df = pd.read_parquet(NOTES_PATH)
+                        self.notes_df['note_date'] = pd.to_datetime(self.notes_df['note_date'])
+                    except Exception as e:
+                        print(f"   Warning: Could not load notes: {e}")
+                
+                if self.annotations_df is None:
+                    try:
+                        print("   Loading annotations for runtime lookups...")
+                        self.annotations_df = pd.read_csv(ANNOTATIONS_PATH)
+                        if 'studyid' in self.annotations_df.columns:
+                            self.annotations_df.rename(columns={'studyid': 'maskedid'}, inplace=True)
+                        if 'date' in self.annotations_df.columns:
+                            self.annotations_df['annotation_date'] = pd.to_datetime(self.annotations_df['date'])
+                    except Exception as e:
+                        print(f"   Warning: Could not load annotations: {e}")
                 
                 # Apply filter
                 original_count = len(self.merged_df)
+                print(f"   Applying filter: {self.filter_mode}")
                 self.merged_df = self._apply_dataset_filter_fast(self.merged_df)
                 filtered_count = len(self.merged_df)
+                print(f"   After filter: {filtered_count:,} rows")
                 
-                return True, f"Loaded preprocessed data. Filter: {self.filter_mode}. Images: {filtered_count:,}/{original_count:,}"
+                return True, f"✅ Loaded preprocessed data. Filter: {self.filter_mode}. Images: {filtered_count:,}/{original_count:,}"
             except Exception as e:
-                print(f"Failed to load preprocessed data: {e}")
-                print("Falling back to regular loading...")
+                print(f"❌ Failed to load preprocessed data: {e}")
+                print("   Falling back to regular loading...")
+        else:
+            print("⚠️  Using regular loading (SLOW)...")
+            if not USE_PREPROCESSED:
+                print("   Reason: USE_PREPROCESSED is False")
+            elif not PREPROCESSED_PATH:
+                print("   Reason: PREPROCESSED_PATH is None")
+            elif not Path(PREPROCESSED_PATH).exists():
+                print(f"   Reason: File does not exist at {PREPROCESSED_PATH}")
+                print("   → Run preprocessing/create_preprocessed_dataset.py first!")
         
-        # Regular loading (slower)
+        # Regular loading (slower) - need all datasets
         if self.diagnosis_df is None or self.notes_df is None or self.cross_df is None or self.annotations_df is None:
             success, message = self.load_data()
             if not success:

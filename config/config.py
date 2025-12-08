@@ -14,7 +14,7 @@ IMAGE_BASE_PATH = r"L:\SlitLamp"
 
 # Preprocessed dataset path (RECOMMENDED for faster loading)
 # Run preprocessing/create_preprocessed_dataset.py first to create this file
-PREPROCESSED_PATH = None  # Set to path of preprocessed file, or None to disable
+PREPROCESSED_PATH = r"L:\Preprocessed_Slitlamp_Files\preprocessed_dataset.parquet"  # Set to path of preprocessed file, or None to disable
 # Example: PREPROCESSED_PATH = r"C:\Projects\slitlamp_labeling_app\data\preprocessed_dataset.parquet"
 
 # Use preprocessed dataset if available (MUCH FASTER!)
