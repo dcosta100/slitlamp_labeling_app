@@ -11,8 +11,13 @@ from config.config import (
     DIAGNOSIS_PATH,
     NOTES_PATH,
     CROSS_PATH,
+    ANNOTATIONS_PATH,
     IMAGE_BASE_PATH,
-    MAX_NOTE_DAYS_DIFFERENCE
+    MAX_NOTE_DAYS_DIFFERENCE,
+    MAX_ANNOTATION_DAYS_DIFFERENCE,
+    DEFAULT_DATASET_FILTER,
+    PREPROCESSED_PATH,
+    USE_PREPROCESSED
 )
 
 class DataLoader:
@@ -22,7 +27,9 @@ class DataLoader:
         self.diagnosis_df = None
         self.notes_df = None
         self.cross_df = None
+        self.annotations_df = None
         self.merged_df = None
+        self.filter_mode = DEFAULT_DATASET_FILTER
         
     @st.cache_data
     def load_data(_self):
@@ -37,17 +44,46 @@ class DataLoader:
             # Load crosswalk data (CSV file)
             _self.cross_df = pd.read_csv(CROSS_PATH)
             
+            # Load annotations data (CSV file)
+            _self.annotations_df = pd.read_csv(ANNOTATIONS_PATH)
+            
+            # Rename studyid to maskedid in annotations
+            if 'studyid' in _self.annotations_df.columns:
+                _self.annotations_df.rename(columns={'studyid': 'maskedid'}, inplace=True)
+            
             # Convert date columns to datetime
             _self.diagnosis_df['exam_date'] = pd.to_datetime(_self.diagnosis_df['exam_date'])
             _self.notes_df['note_date'] = pd.to_datetime(_self.notes_df['note_date'])
+            
+            # Convert annotation date column to datetime
+            if 'date' in _self.annotations_df.columns:
+                _self.annotations_df['annotation_date'] = pd.to_datetime(_self.annotations_df['date'])
             
             return True, "Data loaded successfully"
         except Exception as e:
             return False, f"Error loading data: {str(e)}"
     
     def merge_datasets(self):
-        """Merge all datasets"""
-        if self.diagnosis_df is None or self.notes_df is None or self.cross_df is None:
+        """Merge all datasets and apply filters"""
+        
+        # Try to load preprocessed dataset if enabled
+        if USE_PREPROCESSED and PREPROCESSED_PATH and Path(PREPROCESSED_PATH).exists():
+            try:
+                print(f"Loading preprocessed dataset from {PREPROCESSED_PATH}...")
+                self.merged_df = pd.read_parquet(PREPROCESSED_PATH)
+                
+                # Apply filter
+                original_count = len(self.merged_df)
+                self.merged_df = self._apply_dataset_filter_fast(self.merged_df)
+                filtered_count = len(self.merged_df)
+                
+                return True, f"Loaded preprocessed data. Filter: {self.filter_mode}. Images: {filtered_count:,}/{original_count:,}"
+            except Exception as e:
+                print(f"Failed to load preprocessed data: {e}")
+                print("Falling back to regular loading...")
+        
+        # Regular loading (slower)
+        if self.diagnosis_df is None or self.notes_df is None or self.cross_df is None or self.annotations_df is None:
             success, message = self.load_data()
             if not success:
                 return False, message
@@ -57,12 +93,81 @@ class DataLoader:
             self.merged_df = self.cross_df.merge(
                 self.diagnosis_df,
                 on='maskedid_studyid',
-                how='left'
+                how='left',
+                suffixes=('', '_diag')
             )
             
-            return True, "Datasets merged successfully"
+            # Handle duplicate columns
+            for col in list(self.merged_df.columns):
+                if col.endswith('_diag'):
+                    original_col = col.replace('_diag', '')
+                    if original_col in self.merged_df.columns:
+                        self.merged_df[original_col] = self.merged_df[original_col].fillna(self.merged_df[col])
+                    else:
+                        self.merged_df[original_col] = self.merged_df[col]
+                    self.merged_df.drop(col, axis=1, inplace=True)
+            
+            # Apply dataset filter (WARNING: SLOW without preprocessing!)
+            original_count = len(self.merged_df)
+            if self.filter_mode != "ALL":
+                st.warning("⚠️ Filtering without preprocessed data is SLOW! Consider running preprocessing script.")
+                self.merged_df = self._apply_dataset_filter(self.merged_df)
+            filtered_count = len(self.merged_df)
+            
+            return True, f"Datasets merged. Filter: {self.filter_mode}. Images: {filtered_count:,}/{original_count:,}"
         except Exception as e:
             return False, f"Error merging datasets: {str(e)}"
+    
+    def _apply_dataset_filter_fast(self, df):
+        """Apply dataset filter using pre-calculated flags (FAST)"""
+        if self.filter_mode == "ALL":
+            return df
+        
+        # Use pre-calculated flags
+        if self.filter_mode == "NOTES":
+            df = df[df['has_notes']].copy()
+        elif self.filter_mode == "ANNOTATIONS":
+            df = df[df['has_annotations']].copy()
+        elif self.filter_mode == "NOTES_AND_ANNOTATIONS":
+            df = df[df['has_notes'] & df['has_annotations']].copy()
+        
+        return df.reset_index(drop=True)
+    
+    def _apply_dataset_filter(self, df):
+        """Apply dataset filter based on configuration"""
+        if self.filter_mode == "ALL":
+            return df
+        
+        # Add flags for matching notes and annotations
+        df = df.copy()
+        df['has_notes'] = False
+        df['has_annotations'] = False
+        
+        for idx, row in df.iterrows():
+            # Check for notes
+            if pd.notna(row.get('pat_mrn')) and pd.notna(row.get('exam_date')):
+                notes = self.get_closest_notes(row['pat_mrn'], row['exam_date'])
+                if notes:
+                    df.at[idx, 'has_notes'] = True
+            
+            # Check for annotations
+            if pd.notna(row.get('maskedid')) and pd.notna(row.get('exam_date')):
+                annotations = self.get_annotations(row['maskedid'], row['exam_date'])
+                if annotations:
+                    df.at[idx, 'has_annotations'] = True
+        
+        # Filter based on mode
+        if self.filter_mode == "NOTES":
+            df = df[df['has_notes']].copy()
+        elif self.filter_mode == "ANNOTATIONS":
+            df = df[df['has_annotations']].copy()
+        elif self.filter_mode == "NOTES_AND_ANNOTATIONS":
+            df = df[df['has_notes'] & df['has_annotations']].copy()
+        
+        # Drop the helper columns
+        df.drop(['has_notes', 'has_annotations'], axis=1, inplace=True, errors='ignore')
+        
+        return df.reset_index(drop=True)
     
     def get_closest_notes(self, pat_mrn, exam_date):
         """
@@ -129,6 +234,55 @@ class DataLoader:
         
         return result
     
+    def get_annotations(self, maskedid, exam_date):
+        """
+        Get annotations for a specific maskedid within date range
+        Returns: list of dicts with annotation information
+        """
+        if self.annotations_df is None:
+            return []
+        
+        # Filter annotations for this maskedid
+        patient_annotations = self.annotations_df[
+            self.annotations_df['maskedid'] == maskedid
+        ].copy()
+        
+        if patient_annotations.empty:
+            return []
+        
+        # Calculate days difference
+        patient_annotations['days_diff'] = (
+            patient_annotations['annotation_date'] - exam_date
+        ).dt.days
+        patient_annotations['abs_days_diff'] = patient_annotations['days_diff'].abs()
+        
+        # Filter annotations within max days difference (1 week)
+        patient_annotations = patient_annotations[
+            patient_annotations['abs_days_diff'] <= MAX_ANNOTATION_DAYS_DIFFERENCE
+        ]
+        
+        if patient_annotations.empty:
+            return []
+        
+        # Get the closest annotation date
+        min_diff = patient_annotations['abs_days_diff'].min()
+        closest_annotations = patient_annotations[
+            patient_annotations['abs_days_diff'] == min_diff
+        ]
+        
+        # Group by examfield and value for the closest date
+        result = []
+        for _, annotation in closest_annotations.iterrows():
+            result.append({
+                'examfield': annotation.get('examfield', 'Unknown'),
+                'value': annotation.get('value', 'N/A'),
+                'annotation_date': annotation['annotation_date'],
+                'days_diff': int(annotation['days_diff']),
+                'laterality': annotation.get('laterality', 'Unknown')
+            })
+        
+        return result
+    
     def get_image_path(self, row):
         """Construct the full image path"""
         path = Path(IMAGE_BASE_PATH) / row['maskedid'] / row['maskedid_studyid'] / row['proc_name'] / row['photo_name']
@@ -154,6 +308,11 @@ class DataLoader:
         if pd.notna(row['pat_mrn']) and pd.notna(row['exam_date']):
             notes = self.get_closest_notes(row['pat_mrn'], row['exam_date'])
         
+        # Get annotations
+        annotations = []
+        if pd.notna(row['maskedid']) and pd.notna(row['exam_date']):
+            annotations = self.get_annotations(row['maskedid'], row['exam_date'])
+        
         # Construct image path
         image_path = self.get_image_path(row)
         
@@ -169,7 +328,8 @@ class DataLoader:
             'laterality': row.get('laterality'),
             'main_diagnosis': row.get('main_diagnosis'),
             'order_diagnosis': row.get('order_diagnosis'),
-            'notes': notes
+            'notes': notes,
+            'annotations': annotations
         }
         
         return data, "Success"

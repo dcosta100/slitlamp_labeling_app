@@ -13,7 +13,9 @@ from config.config import (
     DIAGNOSIS_OPTIONS,
     FLAG_OPTIONS,
     QUALITY_OPTIONS,
-    AUTO_SAVE_INTERVAL
+    AUTO_SAVE_INTERVAL,
+    DATASET_FILTER_OPTIONS,
+    DEFAULT_DATASET_FILTER
 )
 
 def show():
@@ -24,6 +26,10 @@ def show():
     # Initialize data loader and label manager
     if 'data_loader' not in st.session_state:
         st.session_state.data_loader = DataLoader()
+        # Set filter mode from session state or use default
+        filter_mode = st.session_state.get('dataset_filter', DEFAULT_DATASET_FILTER)
+        st.session_state.data_loader.filter_mode = filter_mode
+        
         with st.spinner("Loading datasets..."):
             success, message = st.session_state.data_loader.load_data()
             if not success:
@@ -33,6 +39,7 @@ def show():
             if not success:
                 st.error(message)
                 return
+            st.success(message)
     
     if 'label_manager' not in st.session_state:
         st.session_state.label_manager = LabelManager(st.session_state.username)
@@ -194,6 +201,53 @@ def show():
                         st.markdown("---")
         else:
             st.info("No clinical notes found for this patient within the search window.")
+        
+        # Annotations
+        annotations = image_data.get('annotations', [])
+        if annotations:
+            with st.expander("🔬 Exam Annotations", expanded=True):
+                # Get the annotation date and days difference
+                if annotations:
+                    days_diff = annotations[0]['days_diff']
+                    ann_date = annotations[0]['annotation_date']
+                    
+                    if days_diff == 0:
+                        timing = "Same day as exam"
+                        icon = "🎯"
+                    elif days_diff < 0:
+                        timing = f"{abs(days_diff)} days before exam"
+                        icon = "⬅️"
+                    else:
+                        timing = f"{days_diff} days after exam"
+                        icon = "➡️"
+                    
+                    st.markdown(f"**{icon} Annotations** - {timing}")
+                    st.caption(f"Date: {ann_date.strftime('%Y-%m-%d')}")
+                    
+                    # Group annotations by laterality
+                    laterality_groups = {}
+                    for ann in annotations:
+                        lat = ann.get('laterality', 'Unknown')
+                        if lat not in laterality_groups:
+                            laterality_groups[lat] = []
+                        laterality_groups[lat].append(ann)
+                    
+                    # Display annotations grouped by laterality
+                    for lat, anns in laterality_groups.items():
+                        st.markdown(f"**{lat.upper()}:**")
+                        ann_data = []
+                        for ann in anns:
+                            ann_data.append({
+                                'Field': ann['examfield'],
+                                'Value': ann['value']
+                            })
+                        
+                        if ann_data:
+                            import pandas as pd
+                            df_anns = pd.DataFrame(ann_data)
+                            st.dataframe(df_anns, use_container_width=True, hide_index=True)
+        else:
+            st.info("No exam annotations found for this image within 1 week.")
         
         st.markdown("---")
         

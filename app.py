@@ -89,6 +89,34 @@ def main():
             
             st.markdown("---")
             
+            # Dataset filter (admin only)
+            if st.session_state.role == "admin":
+                from config.config import DATASET_FILTER_OPTIONS, DEFAULT_DATASET_FILTER
+                
+                st.markdown("### 🔍 Dataset Filter")
+                
+                current_filter = st.session_state.get('dataset_filter', DEFAULT_DATASET_FILTER)
+                
+                filter_mode = st.selectbox(
+                    "Show images with:",
+                    options=list(DATASET_FILTER_OPTIONS.keys()),
+                    index=list(DATASET_FILTER_OPTIONS.keys()).index(current_filter),
+                    format_func=lambda x: DATASET_FILTER_OPTIONS[x],
+                    key="filter_selector"
+                )
+                
+                # If filter changed, update and reload
+                if filter_mode != current_filter:
+                    st.session_state.dataset_filter = filter_mode
+                    # Clear data loader to force reload with new filter
+                    if 'data_loader' in st.session_state:
+                        st.session_state.data_loader.filter_mode = filter_mode
+                        del st.session_state.data_loader
+                    st.rerun()
+                
+                st.caption(f"Current: {DATASET_FILTER_OPTIONS[filter_mode]}")
+                st.markdown("---")
+            
             # Logout button
             if st.button("🚪 Logout", use_container_width=True):
                 for key in list(st.session_state.keys()):

@@ -9,7 +9,17 @@ import os
 DIAGNOSIS_PATH = r"C:\Users\dxr1276\OneDrive\Projects\Forevision\studyinfo_laterality_diagnosis.dta"
 NOTES_PATH = r"C:\Users\dxr1276\OneDrive\Projects\Forevision\ehrs_transformed.parquet"
 CROSS_PATH = r"C:\Users\dxr1276\OneDrive\Projects\Forevision\slitlamp_crosswalk_complete_12082025.csv"
+ANNOTATIONS_PATH = r"M:\DATASETS\_BPGR\BPGR_slexam_all.csv"
 IMAGE_BASE_PATH = r"L:\SlitLamp"
+
+# Preprocessed dataset path (RECOMMENDED for faster loading)
+# Run preprocessing/create_preprocessed_dataset.py first to create this file
+PREPROCESSED_PATH = None  # Set to path of preprocessed file, or None to disable
+# Example: PREPROCESSED_PATH = r"C:\Projects\slitlamp_labeling_app\data\preprocessed_dataset.parquet"
+
+# Use preprocessed dataset if available (MUCH FASTER!)
+USE_PREPROCESSED = True  # Set to False to always load from scratch
+
 
 # Application paths
 BASE_DIR = Path(__file__).parent.parent
@@ -52,8 +62,20 @@ ROUTE_STRATEGIES = {
 
 # Application settings
 MAX_NOTE_DAYS_DIFFERENCE = 365  # Maximum days to search for notes
+MAX_ANNOTATION_DAYS_DIFFERENCE = 7  # Maximum days difference for annotation matching (1 week)
 IMAGES_PER_SESSION = 50  # Number of images to load at once
 AUTO_SAVE_INTERVAL = 5  # Save every N labels
+
+# Dataset filtering options
+DATASET_FILTER_OPTIONS = {
+    "ALL": "Show all images (no filtering)",
+    "NOTES": "Only images with matching clinical notes",
+    "ANNOTATIONS": "Only images with matching annotations",
+    "NOTES_AND_ANNOTATIONS": "Only images with both notes and annotations"
+}
+
+# Default filter (change this to filter your dataset)
+DEFAULT_DATASET_FILTER = "ALL"  # Options: "ALL", "NOTES", "ANNOTATIONS", "NOTES_AND_ANNOTATIONS"
 
 # Date format
 DATE_FORMAT = "%Y-%m-%d"
