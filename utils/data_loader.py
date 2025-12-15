@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta
+from functools import lru_cache
 import streamlit as st
 from config.config import (
     DIAGNOSIS_PATH,
@@ -30,6 +31,12 @@ class DataLoader:
         self.annotations_df = None
         self.merged_df = None
         self.filter_mode = DEFAULT_DATASET_FILTER
+        
+        # For lazy loading and caching
+        self._notes_indexed = None
+        self._annotations_indexed = None
+        self._notes_loaded = False
+        self._annotations_loaded = False
         
     @st.cache_data
     def load_data(_self):
@@ -106,38 +113,9 @@ class DataLoader:
                 if 'maskedid' in self.merged_df.columns:
                     self.merged_df['maskedid'] = self.merged_df['maskedid'].astype(str).str.strip()
                 
-                # Still need to load notes and annotations for runtime lookups
-                # But we don't need diagnosis or cross since they're already in merged_df
-                if self.notes_df is None:
-                    try:
-                        print("   Loading notes for runtime lookups...")
-                        self.notes_df = pd.read_parquet(NOTES_PATH)
-                        self.notes_df['note_date'] = pd.to_datetime(self.notes_df['note_date'])
-                        
-                        # Convert pat_mrn to string and filter Progress Notes
-                        if 'pat_mrn' in self.notes_df.columns:
-                            self.notes_df['pat_mrn'] = self.notes_df['pat_mrn'].astype(str).str.strip()
-                        if 'ip_note_type' in self.notes_df.columns:
-                            original_count = len(self.notes_df)
-                            self.notes_df = self.notes_df[self.notes_df['ip_note_type'] == 'Progress Notes'].copy()
-                            print(f"     Filtered to Progress Notes: {len(self.notes_df):,} / {original_count:,}")
-                    except Exception as e:
-                        print(f"   Warning: Could not load notes: {e}")
-                
-                if self.annotations_df is None:
-                    try:
-                        print("   Loading annotations for runtime lookups...")
-                        self.annotations_df = pd.read_csv(ANNOTATIONS_PATH)
-                        if 'studyid' in self.annotations_df.columns:
-                            self.annotations_df.rename(columns={'studyid': 'maskedid'}, inplace=True)
-                        if 'date' in self.annotations_df.columns:
-                            self.annotations_df['annotation_date'] = pd.to_datetime(self.annotations_df['date'])
-                        
-                        # Convert maskedid to string
-                        if 'maskedid' in self.annotations_df.columns:
-                            self.annotations_df['maskedid'] = self.annotations_df['maskedid'].astype(str).str.strip()
-                    except Exception as e:
-                        print(f"   Warning: Could not load annotations: {e}")
+                # DON'T load notes/annotations yet - use lazy loading!
+                # They will be loaded only when actually needed
+                print("   Using lazy loading for notes and annotations (faster!)")
                 
                 # Apply filter
                 original_count = len(self.merged_df)
@@ -211,6 +189,51 @@ class DataLoader:
         
         return df.reset_index(drop=True)
     
+    def _ensure_notes_loaded(self):
+        """Lazy load notes data only when needed"""
+        if not self._notes_loaded:
+            try:
+                print("   📝 Loading notes for first time (lazy loading)...")
+                self.notes_df = pd.read_parquet(NOTES_PATH)
+                self.notes_df['note_date'] = pd.to_datetime(self.notes_df['note_date'])
+                
+                # Convert pat_mrn to string and filter Progress Notes
+                if 'pat_mrn' in self.notes_df.columns:
+                    self.notes_df['pat_mrn'] = self.notes_df['pat_mrn'].astype(str).str.strip()
+                if 'ip_note_type' in self.notes_df.columns:
+                    self.notes_df = self.notes_df[self.notes_df['ip_note_type'] == 'Progress Notes'].copy()
+                
+                # Create indexed version for fast lookups
+                self._notes_indexed = self.notes_df.groupby('pat_mrn')
+                self._notes_loaded = True
+                print(f"   ✅ Notes loaded and indexed ({len(self.notes_df):,} Progress Notes)")
+            except Exception as e:
+                print(f"   ⚠️  Could not load notes: {e}")
+                self._notes_loaded = True  # Don't try again
+    
+    def _ensure_annotations_loaded(self):
+        """Lazy load annotations data only when needed"""
+        if not self._annotations_loaded:
+            try:
+                print("   🔬 Loading annotations for first time (lazy loading)...")
+                self.annotations_df = pd.read_csv(ANNOTATIONS_PATH)
+                if 'studyid' in self.annotations_df.columns:
+                    self.annotations_df.rename(columns={'studyid': 'maskedid'}, inplace=True)
+                if 'date' in self.annotations_df.columns:
+                    self.annotations_df['annotation_date'] = pd.to_datetime(self.annotations_df['date'])
+                
+                # Convert maskedid to string
+                if 'maskedid' in self.annotations_df.columns:
+                    self.annotations_df['maskedid'] = self.annotations_df['maskedid'].astype(str).str.strip()
+                
+                # Create indexed version for fast lookups
+                self._annotations_indexed = self.annotations_df.groupby('maskedid')
+                self._annotations_loaded = True
+                print(f"   ✅ Annotations loaded and indexed ({len(self.annotations_df):,} records)")
+            except Exception as e:
+                print(f"   ⚠️  Could not load annotations: {e}")
+                self._annotations_loaded = True  # Don't try again
+    
     def _apply_dataset_filter(self, df):
         """Apply dataset filter based on configuration"""
         if self.filter_mode == "ALL":
@@ -252,11 +275,17 @@ class DataLoader:
         Get the closest note(s) to the exam date
         Returns: list of dicts with note information
         """
-        if self.notes_df is None:
+        # Lazy load notes if needed
+        self._ensure_notes_loaded()
+        
+        if self.notes_df is None or self._notes_indexed is None:
             return []
         
-        # Filter notes for this patient
-        patient_notes = self.notes_df[self.notes_df['pat_mrn'] == pat_mrn].copy()
+        # Use indexed lookup (MUCH faster than filtering!)
+        if pat_mrn not in self._notes_indexed.groups:
+            return []
+        
+        patient_notes = self._notes_indexed.get_group(pat_mrn).copy()
         
         if patient_notes.empty:
             return []
@@ -317,13 +346,17 @@ class DataLoader:
         Get annotations for a specific maskedid within date range
         Returns: list of dicts with annotation information
         """
-        if self.annotations_df is None:
+        # Lazy load annotations if needed
+        self._ensure_annotations_loaded()
+        
+        if self.annotations_df is None or self._annotations_indexed is None:
             return []
         
-        # Filter annotations for this maskedid
-        patient_annotations = self.annotations_df[
-            self.annotations_df['maskedid'] == maskedid
-        ].copy()
+        # Use indexed lookup (MUCH faster!)
+        if maskedid not in self._annotations_indexed.groups:
+            return []
+        
+        patient_annotations = self._annotations_indexed.get_group(maskedid).copy()
         
         if patient_annotations.empty:
             return []

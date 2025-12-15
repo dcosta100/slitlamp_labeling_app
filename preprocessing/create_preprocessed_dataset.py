@@ -14,7 +14,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from config.config import (
     DIAGNOSIS_PATH,
-    NOTES_PATH,
+    ANONYMIZED_EHR_PATH,
     CROSS_PATH,
     ANNOTATIONS_PATH,
     MAX_NOTE_DAYS_DIFFERENCE,
@@ -36,7 +36,7 @@ def load_all_data():
     
     # Load notes data
     print("  - Loading notes data...")
-    notes_df = pd.read_parquet(NOTES_PATH)
+    notes_df = pd.read_parquet(ANONYMIZED_EHR_PATH)
     notes_df['note_date'] = pd.to_datetime(notes_df['note_date'])
     
     # Convert pat_mrn to string for consistent matching

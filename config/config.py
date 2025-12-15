@@ -7,14 +7,16 @@ import os
 
 # Base paths - UPDATE THESE WITH YOUR ACTUAL PATHS
 DIAGNOSIS_PATH = r"C:\Users\dxr1276\OneDrive\Projects\Forevision\studyinfo_laterality_diagnosis.dta"
-NOTES_PATH = r"C:\Users\dxr1276\OneDrive\Projects\Forevision\ehrs_transformed.parquet"
+# NOTES_PATH = r"C:\Users\dxr1276\OneDrive\Projects\Forevision\ehrs_transformed.parquet"
+NOTES_PATH = r"C:\Projects_Local\slitlamp_labeling_app\preprocessing\ehr_anonymized_all.parquet"
 CROSS_PATH = r"C:\Users\dxr1276\OneDrive\Projects\Forevision\slitlamp_crosswalk_complete_12082025.csv"
-ANNOTATIONS_PATH = r"M:\DATASETS\_BPGR\BPGR_slexam_all.csv"
-IMAGE_BASE_PATH = r"L:\SlitLamp"
+ANNOTATIONS_PATH = r"C:\Users\dxr1276\Box\PROJECTS\DOUGLAS\Files_code\Databases\_BPGR\BPGR_slexam_all.csv"
+IMAGE_BASE_PATH = r"L:\SlitLamp" # Base directory for images
+ANONYMIZED_EHR_PATH = r"C:\Projects_Local\slitlamp_labeling_app\preprocessing\ehr_anonymized_all.parquet"
 
 # Preprocessed dataset path (RECOMMENDED for faster loading)
 # Run preprocessing/create_preprocessed_dataset.py first to create this file
-PREPROCESSED_PATH = r"L:\Preprocessed_Slitlamp_Files\preprocessed_dataset.parquet"  # Set to path of preprocessed file, or None to disable
+PREPROCESSED_PATH = r"C:\Projects_Local\slitlamp_labeling_app\data\preprocessed_dataset.parquet"  # Set to path of preprocessed file, or None to disable
 # Example: PREPROCESSED_PATH = r"C:\Projects\slitlamp_labeling_app\data\preprocessed_dataset.parquet"
 
 # Use preprocessed dataset if available (MUCH FASTER!)
@@ -75,7 +77,7 @@ DATASET_FILTER_OPTIONS = {
 }
 
 # Default filter (change this to filter your dataset)
-DEFAULT_DATASET_FILTER = "ALL"  # Options: "ALL", "NOTES", "ANNOTATIONS", "NOTES_AND_ANNOTATIONS"
+DEFAULT_DATASET_FILTER = "NOTES_AND_ANNOTATIONS"  # Options: "ALL", "NOTES", "ANNOTATIONS", "NOTES_AND_ANNOTATIONS"
 
 # Date format
 DATE_FORMAT = "%Y-%m-%d"
