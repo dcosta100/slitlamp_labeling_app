@@ -35,7 +35,8 @@ from config.config import (
     SCH_EXTENT,
     AUTO_SAVE_INTERVAL,
     DATASET_FILTER_OPTIONS,
-    DEFAULT_DATASET_FILTER
+    DEFAULT_DATASET_FILTER,
+    ENABLE_AUTOFILL_SAME_STUDYID
 )
 
 def show():
@@ -147,6 +148,18 @@ def show():
     # Check if already labeled
     existing_label = st.session_state.label_manager.get_label(current_index)
     
+    # If not labeled, check if we should auto-fill from same studyid
+    if not existing_label and ENABLE_AUTOFILL_SAME_STUDYID:
+        current_studyid = image_data.get('maskedid_studyid')
+        if current_studyid:
+            last_label = st.session_state.label_manager.get_last_label_for_studyid(current_studyid)
+            if last_label:
+                # Store the auto-filled label in session state with a special key
+                autofill_key = f"autofill_{current_index}"
+                if autofill_key not in st.session_state:
+                    st.session_state[autofill_key] = last_label
+                existing_label = st.session_state.get(autofill_key)
+    
     # Main layout - Image on left, Info and Labels on right
     col_img, col_info = st.columns([1, 1])
     
@@ -173,8 +186,21 @@ def show():
         # Labeling form
         st.markdown("### 🏷️ Label This Image")
         
+        # Check if this is auto-filled
+        autofill_key = f"autofill_{current_index}"
+        is_autofilled = autofill_key in st.session_state and not st.session_state.label_manager.is_labeled(current_index)
+        
         if existing_label:
-            st.info(f"✏️ This image was previously labeled on {existing_label['labeled_at']}")
+            if st.session_state.label_manager.is_labeled(current_index):
+                st.info(f"✏️ This image was previously labeled on {existing_label['labeled_at']}")
+            elif is_autofilled:
+                col_msg, col_clear = st.columns([3, 1])
+                with col_msg:
+                    st.success(f"💡 Auto-filled from Study ID: {image_data.get('maskedid_studyid')}")
+                with col_clear:
+                    if st.button("🗑️ Clear", key=f"clear_autofill_{current_index}"):
+                        del st.session_state[autofill_key]
+                        st.rerun()
         
         # Laterality (outside form for immediate feedback)
         default_lat_idx = 0
@@ -619,6 +645,11 @@ def show():
                         'pat_mrn': image_data.get('pat_mrn')
                     }
                 )
+                
+                # Clear autofill from session state after saving
+                autofill_key = f"autofill_{current_index}"
+                if autofill_key in st.session_state:
+                    del st.session_state[autofill_key]
                 
                 if review_button:
                     st.session_state.label_manager.add_to_review_queue(current_index)

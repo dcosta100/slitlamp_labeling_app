@@ -268,6 +268,41 @@ class LabelManager:
         """Get review queue"""
         return self.labels.get("review_queue", [])
     
+    def get_last_label_for_studyid(self, studyid):
+        """
+        Get the most recent label for a given studyid
+        Returns the label data (without metadata like labeled_at, is_edit, etc.)
+        """
+        if not studyid:
+            return None
+        
+        # Find all labels with this studyid, sorted by labeled_at (most recent first)
+        matching_labels = []
+        for image_key, label_data in self.labels["labels"].items():
+            label_studyid = label_data.get("metadata", {}).get("maskedid_studyid")
+            if label_studyid == studyid:
+                matching_labels.append({
+                    "image_key": image_key,
+                    "labeled_at": label_data.get("labeled_at"),
+                    "laterality": label_data.get("laterality"),
+                    "quality": label_data.get("quality"),
+                    "conditions": label_data.get("conditions", {})
+                })
+        
+        if not matching_labels:
+            return None
+        
+        # Sort by labeled_at (most recent first)
+        matching_labels.sort(key=lambda x: x["labeled_at"], reverse=True)
+        
+        # Return the most recent label
+        most_recent = matching_labels[0]
+        return {
+            "laterality": most_recent["laterality"],
+            "quality": most_recent["quality"],
+            "conditions": most_recent["conditions"]
+        }
+    
     @staticmethod
     def get_all_user_stats():
         """Get statistics for all users"""

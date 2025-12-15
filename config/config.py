@@ -165,6 +165,9 @@ MAX_ANNOTATION_DAYS_DIFFERENCE = 7  # Maximum days difference for annotation mat
 IMAGES_PER_SESSION = 50  # Number of images to load at once
 AUTO_SAVE_INTERVAL = 5  # Save every N labels
 
+# Auto-fill settings
+ENABLE_AUTOFILL_SAME_STUDYID = True  # Automatically copy labels from previous images of the same study ID
+
 # Dataset filtering options
 DATASET_FILTER_OPTIONS = {
     "ALL": "Show all images (no filtering)",
