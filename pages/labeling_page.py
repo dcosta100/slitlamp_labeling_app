@@ -149,106 +149,8 @@ def show():
             st.warning("⚠️ Image file not found")
             st.code(str(image_path))
             st.info("The image path may need to be updated in config/config.py")
-    
-    with col_info:
-        st.markdown("### 📋 Clinical Information")
-        
-        # Patient and exam information
-        with st.expander("🔍 Exam Details", expanded=True):
-            info_col1, info_col2 = st.columns(2)
-            with info_col1:
-                st.write(f"**MRN:** {image_data.get('pat_mrn', 'N/A')}")
-                st.write(f"**Study ID:** {image_data.get('maskedid_studyid', 'N/A')}")
-            with info_col2:
-                st.write(f"**Exam Date:** {image_data.get('exam_date', 'N/A')}")
-                st.write(f"**Laterality:** {image_data.get('laterality', 'N/A')}")
-            
-            st.write(f"**Main Diagnosis:** {image_data.get('main_diagnosis', 'N/A')}")
-            st.write(f"**Order Diagnosis:** {image_data.get('order_diagnosis', 'N/A')}")
-        
-        # Clinical notes
-        notes = image_data.get('notes', [])
-        if notes:
-            with st.expander("📝 Clinical Notes", expanded=True):
-                for i, note in enumerate(notes):
-                    days_diff = note['days_diff']
-                    position = note['position']
-                    
-                    if position == 'before':
-                        icon = "⬅️"
-                        timing = f"{abs(days_diff)} days before exam"
-                    elif position == 'after':
-                        icon = "➡️"
-                        timing = f"{days_diff} days after exam"
-                    else:
-                        icon = "🎯"
-                        timing = "Same day as exam"
-                    
-                    st.markdown(f"**{icon} Note {i+1}** - {timing}")
-                    st.caption(f"Date: {note['note_date'].strftime('%Y-%m-%d')}")
-                    
-                    note_text = note['note_text']
-                    if len(note_text) > 500:
-                        with st.expander("View full note"):
-                            st.text(note_text)
-                    else:
-                        st.text(note_text)
-                    
-                    if i < len(notes) - 1:
-                        st.markdown("---")
-        else:
-            st.info("No clinical notes found for this patient within the search window.")
-        
-        # Annotations
-        annotations = image_data.get('annotations', [])
-        if annotations:
-            with st.expander("🔬 Exam Annotations", expanded=True):
-                # Get the annotation date and days difference
-                if annotations:
-                    days_diff = annotations[0]['days_diff']
-                    ann_date = annotations[0]['annotation_date']
-                    
-                    if days_diff == 0:
-                        timing = "Same day as exam"
-                        icon = "🎯"
-                    elif days_diff < 0:
-                        timing = f"{abs(days_diff)} days before exam"
-                        icon = "⬅️"
-                    else:
-                        timing = f"{days_diff} days after exam"
-                        icon = "➡️"
-                    
-                    st.markdown(f"**{icon} Annotations** - {timing}")
-                    st.caption(f"Date: {ann_date.strftime('%Y-%m-%d')}")
-                    
-                    # Group annotations by laterality
-                    laterality_groups = {}
-                    for ann in annotations:
-                        lat = ann.get('laterality', 'Unknown')
-                        if lat not in laterality_groups:
-                            laterality_groups[lat] = []
-                        laterality_groups[lat].append(ann)
-                    
-                    # Display annotations grouped by laterality
-                    for lat, anns in laterality_groups.items():
-                        st.markdown(f"**{lat.upper()}:**")
-                        ann_data = []
-                        for ann in anns:
-                            ann_data.append({
-                                'Field': ann['examfield'],
-                                'Value': ann['value']
-                            })
-                        
-                        if ann_data:
-                            import pandas as pd
-                            df_anns = pd.DataFrame(ann_data)
-                            st.dataframe(df_anns, use_container_width=True, hide_index=True)
-        else:
-            st.info("No exam annotations found for this image within 1 week.")
-        
-        st.markdown("---")
-        
-        # Labeling form
+
+    # Labeling form
         st.markdown("### 🏷️ Label This Image")
         
         if existing_label:
@@ -358,6 +260,103 @@ def show():
                     elif st.session_state.current_position < total_images - 1:
                         st.session_state.current_position += 1
                         st.rerun()
+    
+    with col_info:
+        st.markdown("### 📋 Clinical Information")
+        
+        # Patient and exam information
+        with st.expander("🔍 Exam Details", expanded=True):
+            info_col1, info_col2 = st.columns(2)
+            with info_col1:
+                st.write(f"**Study ID:** {image_data.get('maskedid_studyid', 'N/A')}")
+                st.write(f"**Main Diagnosis:** {image_data.get('main_diagnosis', 'N/A')}")
+                st.write(f"**Order Diagnosis:** {image_data.get('order_diagnosis', 'N/A')}")
+            with info_col2:
+                st.write(f"**Exam Date:** {image_data.get('exam_date', 'N/A')}")
+                st.write(f"**Laterality:** {image_data.get('laterality', 'N/A')}")
+            
+        
+                # Annotations
+        annotations = image_data.get('annotations', [])
+        if annotations:
+            with st.expander("🔬 Exam Description", expanded=True):
+                # Get the annotation date and days difference
+                if annotations:
+                    days_diff = annotations[0]['days_diff']
+                    ann_date = annotations[0]['annotation_date']
+                    
+                    if days_diff == 0:
+                        timing = "Same day as exam"
+                        icon = "🎯"
+                    elif days_diff < 0:
+                        timing = f"{abs(days_diff)} days before exam"
+                        icon = "⬅️"
+                    else:
+                        timing = f"{days_diff} days after exam"
+                        icon = "➡️"
+                    
+                    st.markdown(f"**{icon} Annotations** - {timing}")
+                    st.caption(f"Date: {ann_date.strftime('%Y-%m-%d')}")
+                    
+                    # Group annotations by laterality
+                    laterality_groups = {}
+                    for ann in annotations:
+                        lat = ann.get('laterality', 'Unknown')
+                        if lat not in laterality_groups:
+                            laterality_groups[lat] = []
+                        laterality_groups[lat].append(ann)
+                    
+                    # Display annotations grouped by laterality
+                    for lat, anns in laterality_groups.items():
+                        st.markdown(f"**{lat.upper()}:**")
+                        ann_data = []
+                        for ann in anns:
+                            ann_data.append({
+                                'Field': ann['examfield'],
+                                'Value': ann['value']
+                            })
+                        
+                        if ann_data:
+                            import pandas as pd
+                            df_anns = pd.DataFrame(ann_data)
+                            st.dataframe(df_anns, use_container_width=True, hide_index=True)
+        else:
+            st.info("No exam annotations found for this image within 1 week.")
+
+        # Clinical notes
+        notes = image_data.get('notes', [])
+        if notes:
+            with st.expander("📝 Clinical Notes", expanded=True):
+                for i, note in enumerate(notes):
+                    days_diff = note['days_diff']
+                    position = note['position']
+                    
+                    if position == 'before':
+                        icon = "⬅️"
+                        timing = f"{abs(days_diff)} days before exam"
+                    elif position == 'after':
+                        icon = "➡️"
+                        timing = f"{days_diff} days after exam"
+                    else:
+                        icon = "🎯"
+                        timing = "Same day as exam"
+                    
+                    st.markdown(f"**{icon} Note {i+1}** - {timing}")
+                    st.caption(f"Date: {note['note_date'].strftime('%Y-%m-%d')}")
+                    
+                    note_text = note['note_text']
+                    if len(note_text) > 500:
+                        with st.expander("View full note"):
+                            st.text(note_text)
+                    else:
+                        st.text(note_text)
+                    
+                    if i < len(notes) - 1:
+                        st.markdown("---")
+        else:
+            st.info("No clinical notes found for this patient within the search window.")
+        
+        st.markdown("---")
         
         # Review queue
         review_queue = st.session_state.label_manager.get_review_queue()
