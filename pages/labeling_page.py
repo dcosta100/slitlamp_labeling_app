@@ -558,19 +558,23 @@ def show():
         # Initialize button states
         save_button = False
         review_button = False
+        save_next_button = False
         
         # Action buttons - NOW WITH FORM
         with st.form("save_form"):
-            col_save, col_review = st.columns(2)
+            col_save, col_review, col_next = st.columns(3)
             
             with col_save:
                 save_button = st.form_submit_button("💾 Save Label", use_container_width=True)
             
             with col_review:
-                review_button = st.form_submit_button("📌 Save & Mark for Review", use_container_width=True)
+                review_button = st.form_submit_button("📌 Save & Review", use_container_width=True)
+            
+            with col_next:
+                save_next_button = st.form_submit_button("💾➡️ Save & Next", use_container_width=True, type="primary")
         
         # Handle form submission (OUTSIDE the form)
-        if save_button or review_button:
+        if save_button or review_button or save_next_button:
             # Validation
             validation_error = None
             
@@ -656,17 +660,31 @@ def show():
                 
                 st.success("✅ Label saved successfully!")
                 
-                # Auto-advance to next unlabeled image
-                next_unlabeled = st.session_state.label_manager.get_next_unlabeled_index(
-                    st.session_state.route_indices,
-                    st.session_state.current_position + 1
-                )
-                if next_unlabeled is not None:
-                    st.session_state.current_position = next_unlabeled
+                # Navigation logic based on which button was clicked
+                if save_next_button:
+                    # Save & Next: advance to next image (labeled or unlabeled)
+                    if st.session_state.current_position < total_images - 1:
+                        st.session_state.current_position += 1
+                        st.rerun()
+                    else:
+                        st.info("🎉 You've reached the last image!")
+                elif save_button:
+                    # Save Label: stay on current image (just rerun to clear form state)
                     st.rerun()
-                elif st.session_state.current_position < total_images - 1:
-                    st.session_state.current_position += 1
-                    st.rerun()
+                elif review_button:
+                    # Save & Review: advance to next unlabeled image
+                    next_unlabeled = st.session_state.label_manager.get_next_unlabeled_index(
+                        st.session_state.route_indices,
+                        st.session_state.current_position + 1
+                    )
+                    if next_unlabeled is not None:
+                        st.session_state.current_position = next_unlabeled
+                        st.rerun()
+                    elif st.session_state.current_position < total_images - 1:
+                        st.session_state.current_position += 1
+                        st.rerun()
+                    else:
+                        st.info("🎉 All images have been labeled!")
     
     with col_info:
         st.markdown("### 📋 Clinical Information")
