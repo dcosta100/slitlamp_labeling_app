@@ -33,10 +33,22 @@ class LabelManager:
         with open(self.labels_file, 'w') as f:
             json.dump(self.labels, f, indent=2)
     
-    def add_label(self, image_index, image_path, laterality, diagnosis, 
-                  diagnosis_other, flag, quality, metadata=None):
+    def add_label(self, image_index, image_path, laterality, quality, 
+                  conditions=None, metadata=None):
         """
-        Add or update a label
+        Add or update a label with multilabel hierarchical structure
+        
+        Parameters:
+        - image_index: Index of the image
+        - image_path: Path to the image file
+        - laterality: Left or Right
+        - quality: Usable or Non Usable
+        - conditions: Dictionary with condition names as keys and their data as values
+          Example: {
+              "Dry Eye Disease": {"severity": "Moderate", "signs": ["MGD", "Foamy tear film"]},
+              "Cataract": {"type": "Nuclear", "severity": "Mild", "features": []}
+          }
+        - metadata: Additional metadata
         """
         image_key = str(image_index)
         
@@ -46,10 +58,8 @@ class LabelManager:
         label_data = {
             "image_path": image_path,
             "laterality": laterality,
-            "diagnosis": diagnosis,
-            "diagnosis_other": diagnosis_other if diagnosis == "Other" else None,
-            "flag": flag,
             "quality": quality,
+            "conditions": conditions or {},
             "labeled_by": self.username,
             "labeled_at": datetime.now().strftime(DATETIME_FORMAT),
             "is_edit": is_edit,
@@ -105,18 +115,16 @@ class LabelManager:
             return {
                 "total": 0,
                 "by_laterality": {},
-                "by_diagnosis": {},
-                "flagged": 0,
-                "not_usable": 0,
+                "by_quality": {},
+                "by_condition": {},
                 "edited": 0
             }
         
         stats = {
             "total": total,
             "by_laterality": {},
-            "by_diagnosis": {},
-            "flagged": 0,
-            "not_usable": 0,
+            "by_quality": {},
+            "by_condition": {},
             "edited": 0
         }
         
@@ -125,23 +133,119 @@ class LabelManager:
             lat = label["laterality"]
             stats["by_laterality"][lat] = stats["by_laterality"].get(lat, 0) + 1
             
-            # Count by diagnosis
-            diag = label["diagnosis"]
-            if diag == "Other" and label["diagnosis_other"]:
-                diag = f"Other: {label['diagnosis_other']}"
-            stats["by_diagnosis"][diag] = stats["by_diagnosis"].get(diag, 0) + 1
+            # Count by quality
+            quality = label["quality"]
+            stats["by_quality"][quality] = stats["by_quality"].get(quality, 0) + 1
             
-            # Count flags
-            if label["flag"] == "Yes":
-                stats["flagged"] += 1
-            
-            # Count not usable
-            if label["quality"] == "Not Usable":
-                stats["not_usable"] += 1
+            # Count by condition (if usable)
+            if quality == "Usable":
+                conditions = label.get("conditions", {})
+                for condition_name in conditions.keys():
+                    stats["by_condition"][condition_name] = stats["by_condition"].get(condition_name, 0) + 1
             
             # Count edits
             if label.get("is_edit", False):
                 stats["edited"] += 1
+        
+        return stats
+    
+    def get_detailed_statistics(self):
+        """Get detailed statistics including condition-specific data"""
+        labels = self.labels["labels"]
+        stats = self.get_statistics()
+        
+        # Add detailed statistics per condition
+        stats["detailed"] = {
+            "dry_eye": {"by_severity": {}, "by_signs": {}},
+            "cataract": {"by_type": {}, "by_severity": {}, "by_features": {}},
+            "infectious": {"by_type": {}, "by_etiology": {}, "by_size": {}},
+            "tumor": {"by_type": {}, "by_malignancy": {}, "by_location": {}},
+            "sch": {"by_presence": {}, "by_extent": {}}
+        }
+        
+        for label in labels.values():
+            if label.get("quality") != "Usable":
+                continue
+                
+            conditions = label.get("conditions", {})
+            
+            # Dry Eye Disease
+            if "Dry Eye Disease" in conditions:
+                data = conditions["Dry Eye Disease"]
+                severity = data.get("severity")
+                if severity:
+                    stats["detailed"]["dry_eye"]["by_severity"][severity] = \
+                        stats["detailed"]["dry_eye"]["by_severity"].get(severity, 0) + 1
+                
+                for sign in data.get("signs", []):
+                    stats["detailed"]["dry_eye"]["by_signs"][sign] = \
+                        stats["detailed"]["dry_eye"]["by_signs"].get(sign, 0) + 1
+            
+            # Cataract
+            if "Cataract" in conditions:
+                data = conditions["Cataract"]
+                cat_type = data.get("type")
+                if cat_type:
+                    stats["detailed"]["cataract"]["by_type"][cat_type] = \
+                        stats["detailed"]["cataract"]["by_type"].get(cat_type, 0) + 1
+                
+                severity = data.get("severity")
+                if severity:
+                    stats["detailed"]["cataract"]["by_severity"][severity] = \
+                        stats["detailed"]["cataract"]["by_severity"].get(severity, 0) + 1
+                
+                for feature in data.get("features", []):
+                    stats["detailed"]["cataract"]["by_features"][feature] = \
+                        stats["detailed"]["cataract"]["by_features"].get(feature, 0) + 1
+            
+            # Infectious Keratitis / Conjunctivitis
+            if "Infectious Keratitis / Conjunctivitis" in conditions:
+                data = conditions["Infectious Keratitis / Conjunctivitis"]
+                inf_type = data.get("type")
+                if inf_type:
+                    stats["detailed"]["infectious"]["by_type"][inf_type] = \
+                        stats["detailed"]["infectious"]["by_type"].get(inf_type, 0) + 1
+                
+                etiology = data.get("etiology")
+                if etiology:
+                    stats["detailed"]["infectious"]["by_etiology"][etiology] = \
+                        stats["detailed"]["infectious"]["by_etiology"].get(etiology, 0) + 1
+                
+                size = data.get("keratitis_size")
+                if size:
+                    stats["detailed"]["infectious"]["by_size"][size] = \
+                        stats["detailed"]["infectious"]["by_size"].get(size, 0) + 1
+            
+            # Ocular Surface Tumors
+            if "Ocular Surface Tumors" in conditions:
+                data = conditions["Ocular Surface Tumors"]
+                tumor_type = data.get("type")
+                if tumor_type:
+                    stats["detailed"]["tumor"]["by_type"][tumor_type] = \
+                        stats["detailed"]["tumor"]["by_type"].get(tumor_type, 0) + 1
+                
+                malignancy = data.get("malignancy")
+                if malignancy:
+                    stats["detailed"]["tumor"]["by_malignancy"][malignancy] = \
+                        stats["detailed"]["tumor"]["by_malignancy"].get(malignancy, 0) + 1
+                
+                location = data.get("location")
+                if location:
+                    stats["detailed"]["tumor"]["by_location"][location] = \
+                        stats["detailed"]["tumor"]["by_location"].get(location, 0) + 1
+            
+            # Subconjunctival Hemorrhage
+            if "Subconjunctival Hemorrhage" in conditions:
+                data = conditions["Subconjunctival Hemorrhage"]
+                presence = data.get("presence")
+                if presence:
+                    stats["detailed"]["sch"]["by_presence"][presence] = \
+                        stats["detailed"]["sch"]["by_presence"].get(presence, 0) + 1
+                
+                extent = data.get("extent")
+                if extent:
+                    stats["detailed"]["sch"]["by_extent"][extent] = \
+                        stats["detailed"]["sch"]["by_extent"].get(extent, 0) + 1
         
         return stats
     

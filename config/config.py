@@ -37,18 +37,115 @@ USERS_DIR.mkdir(parents=True, exist_ok=True)
 # User configuration file
 USERS_CONFIG_FILE = USERS_DIR / "users.json"
 
-# Labeling options
-LATERALITY_OPTIONS = ["Left", "Right"]
-DIAGNOSIS_OPTIONS = [
+# Labeling options - MULTILABEL HIERARCHICAL STRUCTURE
+LATERALITY_OPTIONS = ["Left", "Right", "Not Possible to Determine"]
+
+# Quality options (first choice)
+QUALITY_OPTIONS = ["Usable", "Non Usable"]
+
+# Main diagnostic categories (MULTILABEL - can select multiple)
+DIAGNOSTIC_CATEGORIES = [
+    "Dry Eye Disease",
+    "Cataract",
+    "Infectious Keratitis / Conjunctivitis",
+    "Ocular Surface Tumors",
+    "Subconjunctival Hemorrhage",
+    "None of the Above"
+]
+
+# 1) Dry Eye Disease options
+DRY_EYE_SEVERITY = ["None", "Mild", "Moderate", "Severe"]
+DRY_EYE_SIGNS = [
+    "MGD",
+    "Lid telangiectasia",
+    "Foamy tear film",
+    "Conjunctival injection",
+    "Filaments",
+    "Exposure",
+    "Conjunctivochalasis"
+]
+
+# 2) Cataract options
+CATARACT_TYPE = [
+    "None",
+    "Nuclear",
+    "Cortical",
+    "PSC",
+    "Mature-White",
+    "Pseudophakia",
+    "Aphakia",
+    "Other-Unclear"
+]
+CATARACT_SEVERITY = ["Mild", "Moderate", "Severe"]
+CATARACT_FEATURES = [
+    "Brunescent",
+    "Cortical spokes",
+    "Posterior plaque",
+    "Phacodonesis"
+]
+
+# 3) Infectious Keratitis / Conjunctivitis options
+INFECTIOUS_TYPE = [
+    "Keratitis—Infectious",
+    "Conjunctivitis—Infectious",
+    "No infection",
+    "Unclear"
+]
+INFECTIOUS_ETIOLOGY = [
+    "Bacterial",
+    "Fungal",
+    "Herpetic",
+    "Acanthamoeba",
+    "Unknown"
+]
+KERATITIS_SIZE = ["<2 mm", "2–5 mm", ">5 mm"]
+KERATITIS_FEATURES = [
+    "Epi defect",
+    "Stromal infiltrate",
     "Ulcer",
-    "Hyposphagma",
-    "Dry Eye",
+    "Feathery edge",
+    "Ring",
+    "Satellite",
+    "Hypopyon",
+    "Dendrite",
+    "Pseudodendrite"
+]
+CONJUNCTIVITIS_FEATURES = [
+    "Papillae",
+    "Follicles",
+    "Membrane",
+    "Pseudomembrane",
+    "Mucus",
+    "SEIs"
+]
+
+# 4) Ocular Surface Tumors options
+TUMOR_TYPE = [
+    "OSSN",
     "Pterygium",
     "Pinguecula",
-    "Other"
+    "Conjunctival nevus",
+    "Melanoma",
+    "Papilloma",
+    "No lesion",
+    "Unclear"
 ]
-FLAG_OPTIONS = ["No", "Yes"]
-QUALITY_OPTIONS = ["Usable", "Not Usable"]
+TUMOR_MALIGNANCY = ["Benign", "Malignant", "Indeterminate"]
+TUMOR_LOCATION = ["Nasal", "Temporal", "Superior", "Inferior", "Multifocal"]
+TUMOR_FEATURES = [
+    "Leukoplakia",
+    "Gelatinous",
+    "Feeder vessels",
+    "Limbal involvement",
+    "Pigmented",
+    "Cystic spaces",
+    "Diffuse sheet",
+    "Keratin"
+]
+
+# 5) Subconjunctival Hemorrhage options
+SCH_PRESENCE = ["Present", "None", "Unclear"]
+SCH_EXTENT = ["1 quadrant", "2 quadrants", "3 quadrants", "4 quadrants"]
 
 # Admin credentials (default)
 DEFAULT_ADMIN_USERNAME = "admin"

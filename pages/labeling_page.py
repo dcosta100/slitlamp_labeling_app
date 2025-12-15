@@ -1,5 +1,5 @@
 """
-Labeling page - main interface for image labeling
+Labeling page - main interface for image labeling with MULTILABEL support
 """
 
 import streamlit as st
@@ -10,9 +10,29 @@ from utils.label_manager import LabelManager
 from utils.auth import get_user_route_strategy
 from config.config import (
     LATERALITY_OPTIONS,
-    DIAGNOSIS_OPTIONS,
-    FLAG_OPTIONS,
     QUALITY_OPTIONS,
+    DIAGNOSTIC_CATEGORIES,
+    # Dry Eye Disease
+    DRY_EYE_SEVERITY,
+    DRY_EYE_SIGNS,
+    # Cataract
+    CATARACT_TYPE,
+    CATARACT_SEVERITY,
+    CATARACT_FEATURES,
+    # Infectious
+    INFECTIOUS_TYPE,
+    INFECTIOUS_ETIOLOGY,
+    KERATITIS_SIZE,
+    KERATITIS_FEATURES,
+    CONJUNCTIVITIS_FEATURES,
+    # Tumor
+    TUMOR_TYPE,
+    TUMOR_MALIGNANCY,
+    TUMOR_LOCATION,
+    TUMOR_FEATURES,
+    # Subconjunctival Hemorrhage
+    SCH_PRESENCE,
+    SCH_EXTENT,
     AUTO_SAVE_INTERVAL,
     DATASET_FILTER_OPTIONS,
     DEFAULT_DATASET_FILTER
@@ -150,72 +170,371 @@ def show():
             st.code(str(image_path))
             st.info("The image path may need to be updated in config/config.py")
 
-    # Labeling form
+        # Labeling form
         st.markdown("### 🏷️ Label This Image")
         
         if existing_label:
             st.info(f"✏️ This image was previously labeled on {existing_label['labeled_at']}")
         
-        with st.form("labeling_form"):
-            # Laterality
-            default_lat_idx = 0
-            if existing_label and existing_label['laterality'] in LATERALITY_OPTIONS:
-                default_lat_idx = LATERALITY_OPTIONS.index(existing_label['laterality'])
+        # Laterality (outside form for immediate feedback)
+        default_lat_idx = 0
+        if existing_label and existing_label['laterality'] in LATERALITY_OPTIONS:
+            default_lat_idx = LATERALITY_OPTIONS.index(existing_label['laterality'])
+        
+        laterality = st.selectbox(
+            "Laterality *",
+            LATERALITY_OPTIONS,
+            index=default_lat_idx,
+            key=f"lat_{current_index}"
+        )
+        
+        # Quality Assessment (PRIMARY CHOICE - outside form)
+        default_quality_idx = 0
+        if existing_label and existing_label['quality'] in QUALITY_OPTIONS:
+            default_quality_idx = QUALITY_OPTIONS.index(existing_label['quality'])
+        
+        quality = st.selectbox(
+            "Quality Assessment *",
+            QUALITY_OPTIONS,
+            index=default_quality_idx,
+            key=f"quality_{current_index}"
+        )
+        
+        st.markdown("---")
+        
+        # Initialize conditions dictionary
+        conditions = {}
+        
+        # Only show diagnostic options if quality is "Usable"
+        if quality == "Usable":
+            st.markdown("#### 📋 Diagnostic Assessment (Select all that apply)")
             
-            laterality = st.selectbox(
-                "Laterality *",
-                LATERALITY_OPTIONS,
-                index=default_lat_idx,
-                key=f"lat_{current_index}"
+            existing_conditions = existing_label.get('conditions', {}) if existing_label else {}
+            
+            # ===== 1) DRY EYE DISEASE =====
+            has_dry_eye = st.checkbox(
+                "**Dry Eye Disease**",
+                value="Dry Eye Disease" in existing_conditions,
+                key=f"has_dry_eye_{current_index}"
             )
             
-            # Diagnosis
-            default_diag_idx = 0
-            if existing_label and existing_label['diagnosis'] in DIAGNOSIS_OPTIONS:
-                default_diag_idx = DIAGNOSIS_OPTIONS.index(existing_label['diagnosis'])
+            if has_dry_eye:
+                with st.container():
+                    st.markdown("##### 👁️ Dry Eye Disease Details")
+                    
+                    existing_dry_eye = existing_conditions.get("Dry Eye Disease", {})
+                    
+                    # Severity
+                    default_severity_idx = 0
+                    if existing_dry_eye.get('severity') in DRY_EYE_SEVERITY:
+                        default_severity_idx = DRY_EYE_SEVERITY.index(existing_dry_eye['severity'])
+                    
+                    dry_eye_severity = st.selectbox(
+                        "Severity *",
+                        DRY_EYE_SEVERITY,
+                        index=default_severity_idx,
+                        key=f"dry_eye_severity_{current_index}"
+                    )
+                    
+                    # Signs
+                    default_signs = existing_dry_eye.get('signs', [])
+                    dry_eye_signs = st.multiselect(
+                        "Signs (check any if seen)",
+                        DRY_EYE_SIGNS,
+                        default=default_signs,
+                        key=f"dry_eye_signs_{current_index}"
+                    )
+                    
+                    conditions["Dry Eye Disease"] = {
+                        "severity": dry_eye_severity,
+                        "signs": dry_eye_signs
+                    }
+                    
+                    st.markdown("---")
             
-            diagnosis = st.selectbox(
-                "Diagnosis *",
-                DIAGNOSIS_OPTIONS,
-                index=default_diag_idx,
-                key=f"diag_{current_index}"
+            # ===== 2) CATARACT =====
+            has_cataract = st.checkbox(
+                "**Cataract**",
+                value="Cataract" in existing_conditions,
+                key=f"has_cataract_{current_index}"
             )
             
-            # Diagnosis Other
-            diagnosis_other = None
-            if diagnosis == "Other":
-                default_other = existing_label.get('diagnosis_other', '') if existing_label else ''
-                diagnosis_other = st.text_input(
-                    "Specify diagnosis",
-                    value=default_other,
-                    key=f"diag_other_{current_index}"
-                )
+            if has_cataract:
+                with st.container():
+                    st.markdown("##### 🔍 Cataract Details")
+                    
+                    existing_cataract = existing_conditions.get("Cataract", {})
+                    
+                    # Type
+                    default_type_idx = 0
+                    if existing_cataract.get('type') in CATARACT_TYPE:
+                        default_type_idx = CATARACT_TYPE.index(existing_cataract['type'])
+                    
+                    cataract_type = st.selectbox(
+                        "Type *",
+                        CATARACT_TYPE,
+                        index=default_type_idx,
+                        key=f"cataract_type_{current_index}"
+                    )
+                    
+                    cataract_data = {"type": cataract_type}
+                    
+                    # Severity (only for Nuclear/Cortical/PSC)
+                    if cataract_type in ["Nuclear", "Cortical", "PSC"]:
+                        default_severity_idx = 0
+                        if existing_cataract.get('severity') in CATARACT_SEVERITY:
+                            default_severity_idx = CATARACT_SEVERITY.index(existing_cataract['severity'])
+                        
+                        cataract_severity = st.selectbox(
+                            "Severity *",
+                            CATARACT_SEVERITY,
+                            index=default_severity_idx,
+                            key=f"cataract_severity_{current_index}"
+                        )
+                        cataract_data["severity"] = cataract_severity
+                    
+                    # Features (optional)
+                    default_features = existing_cataract.get('features', [])
+                    cataract_features = st.multiselect(
+                        "Features (optional)",
+                        CATARACT_FEATURES,
+                        default=default_features,
+                        key=f"cataract_features_{current_index}"
+                    )
+                    cataract_data["features"] = cataract_features
+                    
+                    conditions["Cataract"] = cataract_data
+                    
+                    st.markdown("---")
             
-            # Flag
-            default_flag_idx = 0
-            if existing_label and existing_label['flag'] in FLAG_OPTIONS:
-                default_flag_idx = FLAG_OPTIONS.index(existing_label['flag'])
-            
-            flag = st.selectbox(
-                "Flag",
-                FLAG_OPTIONS,
-                index=default_flag_idx,
-                key=f"flag_{current_index}"
+            # ===== 3) INFECTIOUS KERATITIS / CONJUNCTIVITIS =====
+            has_infectious = st.checkbox(
+                "**Infectious Keratitis / Conjunctivitis**",
+                value="Infectious Keratitis / Conjunctivitis" in existing_conditions,
+                key=f"has_infectious_{current_index}"
             )
             
-            # Quality
-            default_quality_idx = 0
-            if existing_label and existing_label['quality'] in QUALITY_OPTIONS:
-                default_quality_idx = QUALITY_OPTIONS.index(existing_label['quality'])
+            if has_infectious:
+                with st.container():
+                    st.markdown("##### 🦠 Infectious Keratitis / Conjunctivitis Details")
+                    
+                    existing_infectious = existing_conditions.get("Infectious Keratitis / Conjunctivitis", {})
+                    
+                    # Type
+                    default_type_idx = 0
+                    if existing_infectious.get('type') in INFECTIOUS_TYPE:
+                        default_type_idx = INFECTIOUS_TYPE.index(existing_infectious['type'])
+                    
+                    infectious_type = st.selectbox(
+                        "Type *",
+                        INFECTIOUS_TYPE,
+                        index=default_type_idx,
+                        key=f"infectious_type_{current_index}"
+                    )
+                    
+                    infectious_data = {"type": infectious_type}
+                    
+                    # Etiology (if infectious)
+                    if infectious_type in ["Keratitis—Infectious", "Conjunctivitis—Infectious"]:
+                        default_etiology_idx = 0
+                        if existing_infectious.get('etiology') in INFECTIOUS_ETIOLOGY:
+                            default_etiology_idx = INFECTIOUS_ETIOLOGY.index(existing_infectious['etiology'])
+                        
+                        infectious_etiology = st.selectbox(
+                            "Etiology *",
+                            INFECTIOUS_ETIOLOGY,
+                            index=default_etiology_idx,
+                            key=f"infectious_etiology_{current_index}"
+                        )
+                        infectious_data["etiology"] = infectious_etiology
+                    
+                    # Keratitis-specific options
+                    if infectious_type == "Keratitis—Infectious":
+                        # Size
+                        default_size_idx = 0
+                        if existing_infectious.get('keratitis_size') in KERATITIS_SIZE:
+                            default_size_idx = KERATITIS_SIZE.index(existing_infectious['keratitis_size'])
+                        
+                        keratitis_size = st.selectbox(
+                            "Keratitis Size *",
+                            KERATITIS_SIZE,
+                            index=default_size_idx,
+                            key=f"keratitis_size_{current_index}"
+                        )
+                        infectious_data["keratitis_size"] = keratitis_size
+                        
+                        # Features
+                        default_features = existing_infectious.get('keratitis_features', [])
+                        keratitis_features = st.multiselect(
+                            "Keratitis Features (check any)",
+                            KERATITIS_FEATURES,
+                            default=default_features,
+                            key=f"keratitis_features_{current_index}"
+                        )
+                        infectious_data["keratitis_features"] = keratitis_features
+                    
+                    # Conjunctivitis-specific options
+                    if infectious_type == "Conjunctivitis—Infectious":
+                        default_features = existing_infectious.get('conjunctivitis_features', [])
+                        conjunctivitis_features = st.multiselect(
+                            "Conjunctivitis Features (check any)",
+                            CONJUNCTIVITIS_FEATURES,
+                            default=default_features,
+                            key=f"conjunctivitis_features_{current_index}"
+                        )
+                        infectious_data["conjunctivitis_features"] = conjunctivitis_features
+                    
+                    conditions["Infectious Keratitis / Conjunctivitis"] = infectious_data
+                    
+                    st.markdown("---")
             
-            quality = st.selectbox(
-                "Quality Assessment",
-                QUALITY_OPTIONS,
-                index=default_quality_idx,
-                key=f"quality_{current_index}"
+            # ===== 4) OCULAR SURFACE TUMORS =====
+            has_tumor = st.checkbox(
+                "**Ocular Surface Tumors**",
+                value="Ocular Surface Tumors" in existing_conditions,
+                key=f"has_tumor_{current_index}"
             )
             
-            # Action buttons
+            if has_tumor:
+                with st.container():
+                    st.markdown("##### 🔬 Ocular Surface Tumors Details")
+                    
+                    existing_tumor = existing_conditions.get("Ocular Surface Tumors", {})
+                    
+                    # Type
+                    default_type_idx = 0
+                    if existing_tumor.get('type') in TUMOR_TYPE:
+                        default_type_idx = TUMOR_TYPE.index(existing_tumor['type'])
+                    
+                    tumor_type = st.selectbox(
+                        "Lesion Type *",
+                        TUMOR_TYPE,
+                        index=default_type_idx,
+                        key=f"tumor_type_{current_index}"
+                    )
+                    
+                    tumor_data = {"type": tumor_type}
+                    
+                    # Only show additional fields if not "No lesion" or "Unclear"
+                    if tumor_type not in ["No lesion", "Unclear"]:
+                        # Malignancy
+                        default_malignancy_idx = 0
+                        if existing_tumor.get('malignancy') in TUMOR_MALIGNANCY:
+                            default_malignancy_idx = TUMOR_MALIGNANCY.index(existing_tumor['malignancy'])
+                        
+                        tumor_malignancy = st.selectbox(
+                            "Malignancy *",
+                            TUMOR_MALIGNANCY,
+                            index=default_malignancy_idx,
+                            key=f"tumor_malignancy_{current_index}"
+                        )
+                        tumor_data["malignancy"] = tumor_malignancy
+                        
+                        # Location
+                        default_location_idx = 0
+                        if existing_tumor.get('location') in TUMOR_LOCATION:
+                            default_location_idx = TUMOR_LOCATION.index(existing_tumor['location'])
+                        
+                        tumor_location = st.selectbox(
+                            "Location *",
+                            TUMOR_LOCATION,
+                            index=default_location_idx,
+                            key=f"tumor_location_{current_index}"
+                        )
+                        tumor_data["location"] = tumor_location
+                        
+                        # Features (optional)
+                        default_features = existing_tumor.get('features', [])
+                        tumor_features = st.multiselect(
+                            "Features (optional)",
+                            TUMOR_FEATURES,
+                            default=default_features,
+                            key=f"tumor_features_{current_index}"
+                        )
+                        tumor_data["features"] = tumor_features
+                    
+                    conditions["Ocular Surface Tumors"] = tumor_data
+                    
+                    st.markdown("---")
+            
+            # ===== 5) SUBCONJUNCTIVAL HEMORRHAGE =====
+            has_sch = st.checkbox(
+                "**Subconjunctival Hemorrhage**",
+                value="Subconjunctival Hemorrhage" in existing_conditions,
+                key=f"has_sch_{current_index}"
+            )
+            
+            if has_sch:
+                with st.container():
+                    st.markdown("##### 🩸 Subconjunctival Hemorrhage Details")
+                    
+                    existing_sch = existing_conditions.get("Subconjunctival Hemorrhage", {})
+                    
+                    # Presence
+                    default_presence_idx = 0
+                    if existing_sch.get('presence') in SCH_PRESENCE:
+                        default_presence_idx = SCH_PRESENCE.index(existing_sch['presence'])
+                    
+                    sch_presence = st.selectbox(
+                        "Presence *",
+                        SCH_PRESENCE,
+                        index=default_presence_idx,
+                        key=f"sch_presence_{current_index}"
+                    )
+                    
+                    sch_data = {"presence": sch_presence}
+                    
+                    # Extent (only if present)
+                    if sch_presence == "Present":
+                        default_extent_idx = 0
+                        if existing_sch.get('extent') in SCH_EXTENT:
+                            default_extent_idx = SCH_EXTENT.index(existing_sch['extent'])
+                        
+                        sch_extent = st.selectbox(
+                            "Extent *",
+                            SCH_EXTENT,
+                            index=default_extent_idx,
+                            key=f"sch_extent_{current_index}"
+                        )
+                        sch_data["extent"] = sch_extent
+                    
+                    conditions["Subconjunctival Hemorrhage"] = sch_data
+                    
+                    st.markdown("---")
+            
+            # ===== 6) NONE OF THE ABOVE =====
+            has_none = st.checkbox(
+                "**None of the Above**",
+                value="None of the Above" in existing_conditions,
+                key=f"has_none_{current_index}"
+            )
+            
+            if has_none:
+                with st.container():
+                    st.markdown("##### ℹ️ Other Findings")
+                    
+                    existing_none = existing_conditions.get("None of the Above", {})
+                    default_other = existing_none.get('other_text', '')
+                    
+                    other_text = st.text_area(
+                        "Please describe any findings (optional)",
+                        value=default_other,
+                        key=f"other_text_{current_index}",
+                        height=100
+                    )
+                    
+                    conditions["None of the Above"] = {"other_text": other_text}
+                    
+                    st.markdown("---")
+        
+        st.markdown("---")
+        
+        # Initialize button states
+        save_button = False
+        review_button = False
+        
+        # Action buttons - NOW WITH FORM
+        with st.form("save_form"):
             col_save, col_review = st.columns(2)
             
             with col_save:
@@ -223,43 +542,100 @@ def show():
             
             with col_review:
                 review_button = st.form_submit_button("📌 Save & Mark for Review", use_container_width=True)
+        
+        # Handle form submission (OUTSIDE the form)
+        if save_button or review_button:
+            # Validation
+            validation_error = None
             
-            if save_button or review_button:
-                if diagnosis == "Other" and not diagnosis_other:
-                    st.error("Please specify the diagnosis when selecting 'Other'")
+            if quality == "Usable":
+                # Check if at least one condition is selected
+                if not conditions:
+                    validation_error = "Please select at least one diagnostic category"
                 else:
-                    # Save the label
-                    st.session_state.label_manager.add_label(
-                        image_index=current_index,
-                        image_path=image_data['image_path'],
-                        laterality=laterality,
-                        diagnosis=diagnosis,
-                        diagnosis_other=diagnosis_other,
-                        flag=flag,
-                        quality=quality,
-                        metadata={
-                            'maskedid_studyid': image_data.get('maskedid_studyid'),
-                            'exam_date': str(image_data.get('exam_date')),
-                            'pat_mrn': image_data.get('pat_mrn')
-                        }
-                    )
-                    
-                    if review_button:
-                        st.session_state.label_manager.add_to_review_queue(current_index)
-                    
-                    st.success("✅ Label saved successfully!")
-                    
-                    # Auto-advance to next unlabeled image
-                    next_unlabeled = st.session_state.label_manager.get_next_unlabeled_index(
-                        st.session_state.route_indices,
-                        st.session_state.current_position + 1
-                    )
-                    if next_unlabeled is not None:
-                        st.session_state.current_position = next_unlabeled
-                        st.rerun()
-                    elif st.session_state.current_position < total_images - 1:
-                        st.session_state.current_position += 1
-                        st.rerun()
+                    # Validate each condition
+                    for condition_name, condition_data in conditions.items():
+                        if condition_name == "Dry Eye Disease":
+                            if not condition_data.get("severity"):
+                                validation_error = "Please specify severity for Dry Eye Disease"
+                                break
+                        
+                        elif condition_name == "Cataract":
+                            if not condition_data.get("type"):
+                                validation_error = "Please specify type for Cataract"
+                                break
+                            if condition_data.get("type") in ["Nuclear", "Cortical", "PSC"]:
+                                if not condition_data.get("severity"):
+                                    validation_error = "Please specify severity for this cataract type"
+                                    break
+                        
+                        elif condition_name == "Infectious Keratitis / Conjunctivitis":
+                            if not condition_data.get("type"):
+                                validation_error = "Please specify type for Infectious condition"
+                                break
+                            if condition_data.get("type") in ["Keratitis—Infectious", "Conjunctivitis—Infectious"]:
+                                if not condition_data.get("etiology"):
+                                    validation_error = "Please specify etiology for infectious cases"
+                                    break
+                            if condition_data.get("type") == "Keratitis—Infectious":
+                                if not condition_data.get("keratitis_size"):
+                                    validation_error = "Please specify keratitis size"
+                                    break
+                        
+                        elif condition_name == "Ocular Surface Tumors":
+                            if not condition_data.get("type"):
+                                validation_error = "Please specify lesion type for Tumors"
+                                break
+                            if condition_data.get("type") not in ["No lesion", "Unclear"]:
+                                if not condition_data.get("malignancy"):
+                                    validation_error = "Please specify malignancy for tumor"
+                                    break
+                                if not condition_data.get("location"):
+                                    validation_error = "Please specify location for tumor"
+                                    break
+                        
+                        elif condition_name == "Subconjunctival Hemorrhage":
+                            if not condition_data.get("presence"):
+                                validation_error = "Please specify presence for Subconjunctival Hemorrhage"
+                                break
+                            if condition_data.get("presence") == "Present":
+                                if not condition_data.get("extent"):
+                                    validation_error = "Please specify extent for hemorrhage"
+                                    break
+            
+            if validation_error:
+                st.error(validation_error)
+            else:
+                # Save the label
+                st.session_state.label_manager.add_label(
+                    image_index=current_index,
+                    image_path=image_data['image_path'],
+                    laterality=laterality,
+                    quality=quality,
+                    conditions=conditions,
+                    metadata={
+                        'maskedid_studyid': image_data.get('maskedid_studyid'),
+                        'exam_date': str(image_data.get('exam_date')),
+                        'pat_mrn': image_data.get('pat_mrn')
+                    }
+                )
+                
+                if review_button:
+                    st.session_state.label_manager.add_to_review_queue(current_index)
+                
+                st.success("✅ Label saved successfully!")
+                
+                # Auto-advance to next unlabeled image
+                next_unlabeled = st.session_state.label_manager.get_next_unlabeled_index(
+                    st.session_state.route_indices,
+                    st.session_state.current_position + 1
+                )
+                if next_unlabeled is not None:
+                    st.session_state.current_position = next_unlabeled
+                    st.rerun()
+                elif st.session_state.current_position < total_images - 1:
+                    st.session_state.current_position += 1
+                    st.rerun()
     
     with col_info:
         st.markdown("### 📋 Clinical Information")
@@ -276,7 +652,7 @@ def show():
                 st.write(f"**Laterality:** {image_data.get('laterality', 'N/A')}")
             
         
-                # Annotations
+        # Annotations
         annotations = image_data.get('annotations', [])
         if annotations:
             with st.expander("🔬 Exam Description", expanded=True):
