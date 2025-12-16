@@ -4,26 +4,62 @@ Configuration file for Slitlamp Labeling Application
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
-# Base paths - UPDATE THESE WITH YOUR ACTUAL PATHS
-DIAGNOSIS_PATH = r"C:\Users\dxr1276\OneDrive\Projects\Forevision\studyinfo_laterality_diagnosis.dta"
-# NOTES_PATH = r"C:\Users\dxr1276\OneDrive\Projects\Forevision\ehrs_transformed.parquet"
-NOTES_PATH = r"C:\Projects_Local\slitlamp_labeling_app\preprocessing\ehr_anonymized_all.parquet"
-CROSS_PATH = r"C:\Users\dxr1276\OneDrive\Projects\Forevision\slitlamp_crosswalk_complete_12082025.csv"
-ANNOTATIONS_PATH = r"C:\Users\dxr1276\Box\PROJECTS\DOUGLAS\Files_code\Databases\_BPGR\BPGR_slexam_all.csv"
-IMAGE_BASE_PATH = r"L:\SlitLamp" # Base directory for images
-ANONYMIZED_EHR_PATH = r"C:\Projects_Local\slitlamp_labeling_app\preprocessing\ehr_anonymized_all.parquet"
+# ======================================================
+# Load environment variables (.env)
+# ======================================================
+# This allows machine-specific configuration without
+# changing the codebase. If .env is missing, defaults
+# defined below are used.
+load_dotenv()
 
-# Preprocessed dataset path (RECOMMENDED for faster loading)
-# Run preprocessing/create_preprocessed_dataset.py first to create this file
-PREPROCESSED_PATH = r"C:\Projects_Local\slitlamp_labeling_app\data\preprocessed_dataset.parquet"  # Set to path of preprocessed file, or None to disable
-# Example: PREPROCESSED_PATH = r"C:\Projects\slitlamp_labeling_app\data\preprocessed_dataset.parquet"
+# ======================================================
+# Machine-specific paths (can be overridden by .env)
+# ======================================================
 
-# Use preprocessed dataset if available (MUCH FASTER!)
-USE_PREPROCESSED = True  # Set to False to always load from scratch
+DIAGNOSIS_PATH = os.getenv(
+    "DIAGNOSIS_PATH",
+    r"C:\Users\dxr1276\OneDrive\Projects\Forevision\studyinfo_laterality_diagnosis.dta"
+)
 
+NOTES_PATH = os.getenv(
+    "NOTES_PATH",
+    r"C:\Projects_Local\slitlamp_labeling_app\preprocessing\ehr_anonymized_all.parquet"
+)
 
-# Application paths
+CROSS_PATH = os.getenv(
+    "CROSS_PATH",
+    r"C:\Users\dxr1276\OneDrive\Projects\Forevision\slitlamp_crosswalk_complete_12082025.csv"
+)
+
+ANNOTATIONS_PATH = os.getenv(
+    "ANNOTATIONS_PATH",
+    r"C:\Users\dxr1276\Box\PROJECTS\DOUGLAS\Files_code\Databases\_BPGR\BPGR_slexam_all.csv"
+)
+
+IMAGE_BASE_PATH = os.getenv(
+    "IMAGE_BASE_PATH",
+    r"L:\SlitLamp"
+)
+
+ANONYMIZED_EHR_PATH = os.getenv(
+    "ANONYMIZED_EHR_PATH",
+    r"C:\Projects_Local\slitlamp_labeling_app\preprocessing\ehr_anonymized_all.parquet"
+)
+
+# Preprocessed dataset path (recommended for faster loading)
+PREPROCESSED_PATH = os.getenv(
+    "PREPROCESSED_PATH",
+    r"C:\Projects_Local\slitlamp_labeling_app\data\preprocessed_dataset.parquet"
+)
+
+USE_PREPROCESSED = os.getenv("USE_PREPROCESSED", "True").lower() == "true"
+
+# ======================================================
+# Application paths (project-relative, NOT in .env)
+# ======================================================
+
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
 CONFIG_DIR = BASE_DIR / "config"
@@ -37,13 +73,16 @@ USERS_DIR.mkdir(parents=True, exist_ok=True)
 # User configuration file
 USERS_CONFIG_FILE = USERS_DIR / "users.json"
 
+# ======================================================
 # Labeling options - MULTILABEL HIERARCHICAL STRUCTURE
+# ======================================================
+
 LATERALITY_OPTIONS = ["Left", "Right", "Not Possible to Determine"]
 
 # Quality options (first choice)
 QUALITY_OPTIONS = ["Usable", "Non Usable"]
 
-# Main diagnostic categories (MULTILABEL - can select multiple)
+# Main diagnostic categories (MULTILABEL)
 DIAGNOSTIC_CATEGORIES = [
     "Dry Eye Disease",
     "Cataract",
@@ -53,7 +92,9 @@ DIAGNOSTIC_CATEGORIES = [
     "None of the Above"
 ]
 
-# 1) Dry Eye Disease options
+# ------------------------------------------------------
+# 1) Dry Eye Disease
+# ------------------------------------------------------
 DRY_EYE_SEVERITY = ["None", "Mild", "Moderate", "Severe"]
 DRY_EYE_SIGNS = [
     "MGD",
@@ -65,7 +106,9 @@ DRY_EYE_SIGNS = [
     "Conjunctivochalasis"
 ]
 
-# 2) Cataract options
+# ------------------------------------------------------
+# 2) Cataract
+# ------------------------------------------------------
 CATARACT_TYPE = [
     "None",
     "Nuclear",
@@ -84,7 +127,9 @@ CATARACT_FEATURES = [
     "Phacodonesis"
 ]
 
-# 3) Infectious Keratitis / Conjunctivitis options
+# ------------------------------------------------------
+# 3) Infectious Keratitis / Conjunctivitis
+# ------------------------------------------------------
 INFECTIOUS_TYPE = [
     "Keratitis—Infectious",
     "Conjunctivitis—Infectious",
@@ -119,7 +164,9 @@ CONJUNCTIVITIS_FEATURES = [
     "SEIs"
 ]
 
-# 4) Ocular Surface Tumors options
+# ------------------------------------------------------
+# 4) Ocular Surface Tumors
+# ------------------------------------------------------
 TUMOR_TYPE = [
     "OSSN",
     "Pterygium",
@@ -143,15 +190,23 @@ TUMOR_FEATURES = [
     "Keratin"
 ]
 
-# 5) Subconjunctival Hemorrhage options
+# ------------------------------------------------------
+# 5) Subconjunctival Hemorrhage
+# ------------------------------------------------------
 SCH_PRESENCE = ["Present", "None", "Unclear"]
 SCH_EXTENT = ["1 quadrant", "2 quadrants", "3 quadrants", "4 quadrants"]
 
-# Admin credentials (default)
-DEFAULT_ADMIN_USERNAME = "admin"
-DEFAULT_ADMIN_PASSWORD = "admin123"  # CHANGE THIS IN PRODUCTION
+# ======================================================
+# Admin credentials (DO NOT hardcode in production)
+# ======================================================
 
+DEFAULT_ADMIN_USERNAME = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
+DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")
+
+# ======================================================
 # Labeling route strategies
+# ======================================================
+
 ROUTE_STRATEGIES = {
     "forward": "Start from beginning",
     "backward": "Start from end",
@@ -159,16 +214,23 @@ ROUTE_STRATEGIES = {
     "random": "Random order (seeded by user)"
 }
 
+# ======================================================
 # Application settings
-MAX_NOTE_DAYS_DIFFERENCE = 365  # Maximum days to search for notes
-MAX_ANNOTATION_DAYS_DIFFERENCE = 7  # Maximum days difference for annotation matching (1 week)
-IMAGES_PER_SESSION = 50  # Number of images to load at once
-AUTO_SAVE_INTERVAL = 5  # Save every N labels
+# ======================================================
 
-# Auto-fill settings
-ENABLE_AUTOFILL_SAME_STUDYID = True  # Automatically copy labels from previous images of the same study ID
+MAX_NOTE_DAYS_DIFFERENCE = int(os.getenv("MAX_NOTE_DAYS_DIFFERENCE", 365))
+MAX_ANNOTATION_DAYS_DIFFERENCE = int(os.getenv("MAX_ANNOTATION_DAYS_DIFFERENCE", 7))
+IMAGES_PER_SESSION = int(os.getenv("IMAGES_PER_SESSION", 50))
+AUTO_SAVE_INTERVAL = int(os.getenv("AUTO_SAVE_INTERVAL", 5))
 
-# Dataset filtering options
+ENABLE_AUTOFILL_SAME_STUDYID = (
+    os.getenv("ENABLE_AUTOFILL_SAME_STUDYID", "True").lower() == "true"
+)
+
+# ======================================================
+# Dataset filtering
+# ======================================================
+
 DATASET_FILTER_OPTIONS = {
     "ALL": "Show all images (no filtering)",
     "NOTES": "Only images with matching clinical notes",
@@ -176,9 +238,14 @@ DATASET_FILTER_OPTIONS = {
     "NOTES_AND_ANNOTATIONS": "Only images with both notes and annotations"
 }
 
-# Default filter (change this to filter your dataset)
-DEFAULT_DATASET_FILTER = "NOTES_AND_ANNOTATIONS"  # Options: "ALL", "NOTES", "ANNOTATIONS", "NOTES_AND_ANNOTATIONS"
+DEFAULT_DATASET_FILTER = os.getenv(
+    "DEFAULT_DATASET_FILTER",
+    "NOTES_AND_ANNOTATIONS"
+)
 
-# Date format
+# ======================================================
+# Date formats
+# ======================================================
+
 DATE_FORMAT = "%Y-%m-%d"
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
