@@ -38,10 +38,3 @@ def show():
                         st.error(message)
         
         st.markdown("---")
-        st.info("""
-        **Default Admin Credentials:**
-        - Username: `admin`
-        - Password: `admin123`
-        
-        ⚠️ Please change the default password after first login!
-        """)
