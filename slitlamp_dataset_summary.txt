@@ -1,0 +1,8 @@
+created_at: 2026-01-20T11:09:20.969794
+total_images: 39560
+total_columns: 73
+file_size_mb: 7.243625640869141
+avg_notes_per_image: 4.839787664307381
+avg_annotations_per_image: 4.994009100101112
+max_note_days_diff: 365
+max_annotation_days_diff: 7
