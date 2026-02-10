@@ -235,12 +235,13 @@ DATASET_FILTER_OPTIONS = {
     "ALL": "Show all images (no filtering)",
     "NOTES": "Only images with matching clinical notes",
     "ANNOTATIONS": "Only images with matching annotations",
-    "NOTES_AND_ANNOTATIONS": "Only images with both notes and annotations"
+    "NOTES_AND_ANNOTATIONS": "Only images with both notes and annotations",
+    "WITH_AI_PRELABEL": "Only images with AI pre-labels"
 }
 
 DEFAULT_DATASET_FILTER = os.getenv(
     "DEFAULT_DATASET_FILTER",
-    "NOTES_AND_ANNOTATIONS"
+    "WITH_AI_PRELABEL"
 )
 
 # ======================================================

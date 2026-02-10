@@ -45,6 +45,7 @@ data/users/*.json
 *.dta
 *.parquet
 *.csv
+*.xlsx
 
 # Images (optional - uncomment if you don't want to track images)
 # *.jpg

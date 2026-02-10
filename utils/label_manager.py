@@ -84,6 +84,14 @@ class LabelManager:
         """Get label for a specific image"""
         return self.labels["labels"].get(str(image_index))
     
+    def get_label_by_path(self, image_path):
+        """Get label for a specific image by its path (for AI_prelabel compatibility)"""
+        # First try by index (normal labels)
+        for key, label in self.labels["labels"].items():
+            if label.get('image_path') == image_path:
+                return label
+        return None
+    
     def is_labeled(self, image_index):
         """Check if an image has been labeled"""
         return str(image_index) in self.labels["labels"]

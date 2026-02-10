@@ -186,6 +186,9 @@ class DataLoader:
             df = df[df['has_annotations']].copy()
         elif self.filter_mode == "NOTES_AND_ANNOTATIONS":
             df = df[df['has_notes'] & df['has_annotations']].copy()
+        elif self.filter_mode == "WITH_AI_PRELABEL":
+            # Filter to only images with AI prelabels
+            df = self._apply_ai_prelabel_filter(df)
         
         return df.reset_index(drop=True)
     
@@ -264,11 +267,95 @@ class DataLoader:
             df = df[df['has_annotations']].copy()
         elif self.filter_mode == "NOTES_AND_ANNOTATIONS":
             df = df[df['has_notes'] & df['has_annotations']].copy()
+        elif self.filter_mode == "WITH_AI_PRELABEL":
+            # Filter to only images with AI prelabels
+            df = self._apply_ai_prelabel_filter(df)
         
         # Drop the helper columns
         df.drop(['has_notes', 'has_annotations'], axis=1, inplace=True, errors='ignore')
         
         return df.reset_index(drop=True)
+    
+    def _apply_ai_prelabel_filter(self, df):
+        """Filter to only images with AI pre-labels"""
+        from config.config import LABELS_DIR
+        import json
+        
+        ai_labels_file = LABELS_DIR / "AI_prelabel_labels.json"
+        
+        print(f"   [DEBUG] Looking for AI prelabels at: {ai_labels_file}")
+        print(f"   [DEBUG] File exists: {ai_labels_file.exists()}")
+        
+        if not ai_labels_file.exists():
+            print("   ⚠️  Warning: AI_prelabel_labels.json not found")
+            return df.head(0)  # Return empty dataframe
+        
+        # Load AI prelabels
+        try:
+            with open(ai_labels_file, 'r', encoding='utf-8') as f:
+                ai_data = json.load(f)
+            
+            ai_labels = ai_data.get('labels', {})
+            ai_image_paths = set(ai_labels.keys())
+            
+            print(f"   [DEBUG] AI prelabels loaded: {len(ai_image_paths):,} unique image paths")
+            
+            # Check first few paths
+            print(f"   [DEBUG] Sample AI paths (first 3):")
+            for i, path in enumerate(list(ai_image_paths)[:3]):
+                print(f"      {i+1}. {path}")
+            
+            # Build image_path for merged_df if it doesn't exist
+            if 'image_path' not in df.columns:
+                print(f"   [DEBUG] Building image_path column from merged_df...")
+                df['image_path'] = df.apply(lambda row: self.get_image_path(row), axis=1)
+            
+            print(f"   [DEBUG] Sample merged_df paths (first 3):")
+            for i, path in enumerate(df['image_path'].head(3)):
+                print(f"      {i+1}. {path}")
+            
+            # Check for matches
+            df_paths = set(df['image_path'])
+            matches = ai_image_paths & df_paths
+            
+            print(f"   [DEBUG] Paths in merged_df: {len(df_paths):,}")
+            print(f"   [DEBUG] Matches found: {len(matches):,}")
+            
+            if len(matches) == 0:
+                print("   [DEBUG] No matches! Checking if paths need normalization...")
+                # Try normalizing paths
+                from pathlib import Path
+                
+                # Normalize AI paths
+                ai_paths_normalized = {str(Path(p)).lower() for p in ai_image_paths}
+                df_paths_normalized = {str(Path(p)).lower() for p in df_paths}
+                
+                matches_normalized = ai_paths_normalized & df_paths_normalized
+                print(f"   [DEBUG] Matches after normalization (lowercase): {len(matches_normalized):,}")
+                
+                if len(matches_normalized) > 0:
+                    # Use normalized paths
+                    df['image_path_normalized'] = df['image_path'].apply(lambda p: str(Path(p)).lower())
+                    df = df[df['image_path_normalized'].isin(ai_paths_normalized)].copy()
+                    df = df.drop('image_path_normalized', axis=1)
+                    print(f"   ✅ Filtered to {len(df):,} images with AI pre-labels (normalized paths)")
+                    return df
+                else:
+                    print(f"   ⚠️  Still no matches after normalization")
+                    return df.head(0)
+            
+            print(f"   ✅ Filtering to {len(matches):,} images with AI pre-labels")
+            
+            # Filter dataframe to only images with AI prelabels
+            df = df[df['image_path'].isin(ai_image_paths)].copy()
+            
+            return df
+        
+        except Exception as e:
+            print(f"   ❌ Error loading AI prelabels: {e}")
+            import traceback
+            traceback.print_exc()
+            return df.head(0)
     
     def get_closest_notes(self, pat_mrn, exam_date):
         """
@@ -427,11 +514,23 @@ class DataLoader:
         # Construct image path
         image_path = self.get_image_path(row)
         
+        # Calculate studyid counter (X/Y format)
+        maskedid_studyid = row.get('maskedid_studyid')
+        studyid_counter = None
+        if maskedid_studyid:
+            same_studyid = self.merged_df[self.merged_df['maskedid_studyid'] == maskedid_studyid]
+            studyid_total = len(same_studyid)
+            studyid_indices = same_studyid.index.tolist()
+            if index in studyid_indices:
+                studyid_current = studyid_indices.index(index) + 1
+                studyid_counter = f"{studyid_current}/{studyid_total}"
+        
         data = {
             'index': index,
             'image_path': image_path,
             'maskedid': row.get('maskedid'),
-            'maskedid_studyid': row.get('maskedid_studyid'),
+            'maskedid_studyid': maskedid_studyid,
+            'studyid_counter': studyid_counter,
             'proc_name': row.get('proc_name'),
             'photo_name': row.get('photo_name'),
             'pat_mrn': row.get('pat_mrn'),
@@ -448,6 +547,59 @@ class DataLoader:
     def get_total_images(self):
         """Get total number of images"""
         if self.merged_df is None:
+            self.merge_datasets()
+        return len(self.merged_df) if self.merged_df is not None else 0
+    
+    def create_route(self, total_images, strategy="forward", username=None):
+        """
+        Create a route/sequence for labeling based on strategy
+        
+        Args:
+            total_images: Total number of images
+            strategy: Routing strategy (forward, backward, middle_out, random)
+            username: Username for seeding random routes
+        
+        Returns:
+            List of indices in the desired order
+        """
+        import numpy as np
+        
+        indices = list(range(total_images))
+        
+        if strategy == "forward":
+            return indices
+        
+        elif strategy == "backward":
+            return list(reversed(indices))
+        
+        elif strategy == "middle_out":
+            # Start from middle and alternate outward
+            middle = total_images // 2
+            route = [middle]
+            left = middle - 1
+            right = middle + 1
+            
+            while left >= 0 or right < total_images:
+                if right < total_images:
+                    route.append(right)
+                    right += 1
+                if left >= 0:
+                    route.append(left)
+                    left -= 1
+            
+            return route
+        
+        elif strategy == "random":
+            # Use username as seed for reproducibility
+            seed = hash(username) % (2**32) if username else 42
+            rng = np.random.RandomState(seed)
+            route = indices.copy()
+            rng.shuffle(route)
+            return route
+        
+        else:
+            # Default to forward
+            return indices
             success, message = self.merge_datasets()
             if not success:
                 return 0
