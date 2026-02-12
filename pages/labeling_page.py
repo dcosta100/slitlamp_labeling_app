@@ -34,28 +34,6 @@ from config.config import (
 def show():
     """Show labeling page with AI suggestion support"""
     
-    # ===== DEBUG =====
-    st.write("### DEBUG INFO")
-    st.write(f"Username: {st.session_state.get('username', 'NOT SET')}")
-    st.write(f"Route indices: {len(st.session_state.get('route_indices', []))} images")
-    st.write(f"Current position: {st.session_state.get('current_position', 'NOT SET')}")
-    st.write(f"Data loader loaded: {st.session_state.get('data_loader') is not None}")
-    
-    if 'data_loader' in st.session_state:
-        total = st.session_state.data_loader.get_total_images()
-        st.write(f"Total images in dataset: {total:,}")
-    
-    if st.button("🔄 Reset Route"):
-        if 'route_indices' in st.session_state:
-            del st.session_state.route_indices
-        if 'current_position' in st.session_state:
-            del st.session_state.current_position
-        st.rerun()
-    st.write("---")
-    # ===== END DEBUG =====
-
-    """Show labeling page with AI suggestion support"""
-    
     st.markdown('<p class="main-header">🏷️ Image Labeling Interface</p>', unsafe_allow_html=True)
     
     # Initialize data loader and label manager
