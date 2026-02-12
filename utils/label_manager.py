@@ -86,10 +86,32 @@ class LabelManager:
     
     def get_label_by_path(self, image_path):
         """Get label for a specific image by its path (for AI_prelabel compatibility)"""
-        # First try by index (normal labels)
+        import re
+        
+        def normalize_path(path):
+            """Extract path starting from SlitLamp\ onwards"""
+            path_str = str(path)
+            # Find "SlitLamp" in path (case insensitive)
+            match = re.search(r'SlitLamp[/\\]', path_str, re.IGNORECASE)
+            if match:
+                # Extract from SlitLamp onwards
+                normalized = path_str[match.start():]
+                # Normalize separators to backslash and lowercase
+                normalized = normalized.replace('/', '\\').lower()
+                return normalized
+            return path_str.lower()
+        
+        # Normalize the search path
+        normalized_search = normalize_path(image_path)
+        
+        # Search through labels
         for key, label in self.labels["labels"].items():
-            if label.get('image_path') == image_path:
+            label_path = label.get('image_path', key)
+            normalized_label = normalize_path(label_path)
+            
+            if normalized_label == normalized_search:
                 return label
+        
         return None
     
     def is_labeled(self, image_index):
