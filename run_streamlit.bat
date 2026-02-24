@@ -9,12 +9,12 @@ cd /d "%~dp0" || (
 )
 
 REM Activate venv
-if not exist venv\Scripts\activate (
+if not exist .venv\Scripts\activate (
     echo Virtual environment not found.
     pause
     exit /b
 )
-call venv\Scripts\activate
+call .venv\Scripts\activate
 
 REM Start Streamlit in background
 start "" cmd /c "streamlit run app.py --server.port 8501"
