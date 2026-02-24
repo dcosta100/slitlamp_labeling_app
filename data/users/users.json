@@ -1,0 +1,28 @@
+{
+  "users": {
+    "admin": {
+      "password": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "role": "admin",
+      "created_at": "2025-12-08T12:26:23.231782",
+      "route_strategy": "forward"
+    },
+    "jay": {
+      "password": "bdac857dfb500a0791bd7cd72a8ad260b9a3db09ce8f9de1285f2dbd3412e874",
+      "role": "labeler",
+      "created_at": "2025-12-17T09:48:28.179033",
+      "route_strategy": "forward"
+    },
+    "song": {
+      "password": "7982933fbe2382a834c46da403de99f9c8e08e8f2e7afa50c6bf42f4b63f1c2b",
+      "role": "labeler",
+      "created_at": "2026-02-17T13:51:11.065987",
+      "route_strategy": "backward"
+    },
+    "pali": {
+      "password": "06cb8aceb3f269b99198d5caa02c18704a6509fcd0df92120778fad30abb7eb6",
+      "role": "labeler",
+      "created_at": "2026-02-24T16:28:25.905954",
+      "route_strategy": "forward"
+    }
+  }
+}

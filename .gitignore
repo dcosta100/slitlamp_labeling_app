@@ -41,7 +41,7 @@ ENV/
 
 # Application specific
 data/labels/*.json
-data/users/*.json
+# data/users/*.json
 *.dta
 *.parquet
 *.csv
