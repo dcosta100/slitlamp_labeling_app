@@ -18,11 +18,11 @@
       "created_at": "2026-02-25T11:05:45.105762",
       "route_strategy": "prelabel_first_third"
     },
-    "paoli": {
-      "password": "08e896eb15fe671c76ef24ee464a8a88dac07a3fc553bd6f3434af69a19b3272",
+    "palio": {
+      "password": "1897d560cb26a6aae6857c225ed87149b6e11995404ae17a74435728bffccca4",
       "role": "labeler",
-      "created_at": "2026-02-25T11:05:52.422991",
-      "route_strategy": "prelabel_first_third"
+      "created_at": "2026-02-25T14:34:43.698561",
+      "route_strategy": "prelabel_first"
     }
   }
 }
