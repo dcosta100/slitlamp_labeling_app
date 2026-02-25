@@ -264,7 +264,7 @@ def show():
             st.markdown("#### 🔬 Conditions")
             
             # Dry Eye
-            with st.expander("👁️ Dry Eye Disease", expanded=st.session_state.dry_eye_severity != "None"):
+            with st.expander("👁️ Dry Eye Disease", expanded=True):
                 dry_sev = st.selectbox("Severity", DRY_EYE_SEVERITY,
                                       index=DRY_EYE_SEVERITY.index(st.session_state.dry_eye_severity), key="dry_sev_select")
                 st.session_state.dry_eye_severity = dry_sev
@@ -276,7 +276,7 @@ def show():
                     conditions_data["Dry Eye Disease"] = {"severity": dry_sev, "signs": dry_signs}
             
             # Cataract
-            with st.expander("🔍 Cataract", expanded=st.session_state.cataract_type != "None"):
+            with st.expander("🔍 Cataract", expanded=True):
                 cat_type = st.selectbox("Type", CATARACT_TYPE,
                                        index=CATARACT_TYPE.index(st.session_state.cataract_type), key="cat_type_select")
                 st.session_state.cataract_type = cat_type
@@ -294,7 +294,7 @@ def show():
                     conditions_data["Cataract"] = {"type": cat_type, "severity": None, "features": []}
             
             # Infectious
-            with st.expander("🦠 Infectious", expanded=st.session_state.infectious_type != "No infection"):
+            with st.expander("🦠 Infectious", expanded=True):
                 inf_type = st.selectbox("Type", INFECTIOUS_TYPE,
                                        index=INFECTIOUS_TYPE.index(st.session_state.infectious_type), key="inf_type_select")
                 st.session_state.infectious_type = inf_type
@@ -327,7 +327,7 @@ def show():
                     conditions_data["Infectious Keratitis / Conjunctivitis"] = {"type": inf_type}
             
             # Tumor
-            with st.expander("🔬 Tumor", expanded=st.session_state.tumor_type != "No lesion"):
+            with st.expander("🔬 Tumor", expanded=True):
                 tumor_type = st.selectbox("Type", TUMOR_TYPE,
                                          index=TUMOR_TYPE.index(st.session_state.tumor_type), key="tumor_type_select")
                 st.session_state.tumor_type = tumor_type
@@ -349,7 +349,7 @@ def show():
                     conditions_data["Ocular Surface Tumors"] = {"type": tumor_type}
             
             # SCH
-            with st.expander("🩸 SCH", expanded=st.session_state.sch_presence == "Present"):
+            with st.expander("🩸 SCH", expanded=True):
                 sch_pres = st.selectbox("Presence", SCH_PRESENCE,
                                        index=SCH_PRESENCE.index(st.session_state.sch_presence), key="sch_pres_select")
                 st.session_state.sch_presence = sch_pres
