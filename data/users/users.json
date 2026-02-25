@@ -9,19 +9,19 @@
     "jay": {
       "password": "bdac857dfb500a0791bd7cd72a8ad260b9a3db09ce8f9de1285f2dbd3412e874",
       "role": "labeler",
-      "created_at": "2025-12-17T09:48:28.179033",
-      "route_strategy": "forward"
+      "created_at": "2026-02-25T11:05:38.092414",
+      "route_strategy": "prelabel_first_third"
     },
     "song": {
       "password": "7982933fbe2382a834c46da403de99f9c8e08e8f2e7afa50c6bf42f4b63f1c2b",
       "role": "labeler",
-      "created_at": "2026-02-17T13:51:11.065987",
+      "created_at": "2026-02-25T11:05:45.105762",
       "route_strategy": "prelabel_first_third"
     },
-    "pali": {
-      "password": "06cb8aceb3f269b99198d5caa02c18704a6509fcd0df92120778fad30abb7eb6",
+    "paoli": {
+      "password": "08e896eb15fe671c76ef24ee464a8a88dac07a3fc553bd6f3434af69a19b3272",
       "role": "labeler",
-      "created_at": "2026-02-24T16:28:25.905954",
+      "created_at": "2026-02-25T11:05:52.422991",
       "route_strategy": "prelabel_first_third"
     }
   }
