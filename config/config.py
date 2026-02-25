@@ -18,32 +18,47 @@ load_dotenv()
 # Machine-specific paths (can be overridden by .env)
 # ======================================================
 
-DIAGNOSIS_PATH = os.getenv(
+# ======================================================
+# Machine-specific paths (can be overridden by .env)
+# ======================================================
+
+# Helper function to validate paths
+def _get_path(env_var, default_path, path_type="file"):
+    """Get path from env or default, validate it exists"""
+    path = os.getenv(env_var, default_path)
+    
+    # If env var is explicitly set but empty, raise error
+    if env_var in os.environ and not path.strip():
+        raise ValueError(
+            f"\n{'='*70}\n"
+            f"ERROR: {env_var} is set but empty in .env file!\n"
+            f"Please provide a valid path or remove the line from .env\n"
+            f"{'='*70}"
+        )
+    
+    return path
+
+DIAGNOSIS_PATH = _get_path(
     "DIAGNOSIS_PATH",
     r"C:\Users\dxr1276\OneDrive\Projects\Forevision\studyinfo_laterality_diagnosis.dta"
 )
 
-NOTES_PATH = os.getenv(
-    "NOTES_PATH",
-    r"C:\Projects_Local\slitlamp_labeling_app\preprocessing\ehr_anonymized_all.parquet"
-)
-
-CROSS_PATH = os.getenv(
+CROSS_PATH = _get_path(
     "CROSS_PATH",
     r"C:\Users\dxr1276\OneDrive\Projects\Forevision\slitlamp_crosswalk_complete_12082025.csv"
 )
 
-ANNOTATIONS_PATH = os.getenv(
+ANNOTATIONS_PATH = _get_path(
     "ANNOTATIONS_PATH",
     r"C:\Users\dxr1276\Box\PROJECTS\DOUGLAS\Files_code\Databases\_BPGR\BPGR_slexam_all.csv"
 )
 
-IMAGE_BASE_PATH = os.getenv(
+IMAGE_BASE_PATH = _get_path(
     "IMAGE_BASE_PATH",
     r"L:\SlitLamp"
 )
 
-ANONYMIZED_EHR_PATH = os.getenv(
+ANONYMIZED_EHR_PATH = _get_path(
     "ANONYMIZED_EHR_PATH",
     r"C:\Projects_Local\slitlamp_labeling_app\preprocessing\ehr_anonymized_all.parquet"
 )
