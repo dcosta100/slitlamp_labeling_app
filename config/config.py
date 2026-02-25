@@ -63,6 +63,9 @@ ANONYMIZED_EHR_PATH = _get_path(
     r"C:\Projects_Local\slitlamp_labeling_app\preprocessing\ehr_anonymized_all.parquet"
 )
 
+# Backward compatibility: NOTES_PATH is alias for ANONYMIZED_EHR_PATH
+NOTES_PATH = ANONYMIZED_EHR_PATH
+
 # Preprocessed dataset path (recommended for faster loading)
 PREPROCESSED_PATH = os.getenv(
     "PREPROCESSED_PATH",
@@ -260,7 +263,7 @@ DATASET_FILTER_OPTIONS = {
 
 DEFAULT_DATASET_FILTER = os.getenv(
     "DEFAULT_DATASET_FILTER",
-    "NOTES_AND_ANNOTATIONS"
+    "WITH_AI_PRELABEL"
 )
 
 # ======================================================
