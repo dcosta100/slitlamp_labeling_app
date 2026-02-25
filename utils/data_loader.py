@@ -585,6 +585,35 @@ class DataLoader:
         
         # ── Strategies that work with AI prelabels ──────────────
         if strategy in ["prelabel_first", "prelabel_first_third", "prelabel_second_third", "prelabel_last_third"]:
+            
+            # If we're already filtered to WITH_AI_PRELABEL, all indices have prelabels
+            if self.filter_mode == "WITH_AI_PRELABEL":
+                total_prelabeled = len(indices)
+                
+                if strategy == "prelabel_first":
+                    print(f"   Route 'prelabel_first': All {total_prelabeled:,} images already filtered to prelabels")
+                    return indices
+                
+                elif strategy == "prelabel_first_third":
+                    end_idx = total_prelabeled // 3
+                    route = indices[:end_idx]
+                    print(f"   Route 'prelabel_first_third': {len(route):,} images (1 - {end_idx:,} of {total_prelabeled:,} prelabeled)")
+                    return route
+                
+                elif strategy == "prelabel_second_third":
+                    start_idx = total_prelabeled // 3
+                    end_idx = (total_prelabeled * 2) // 3
+                    route = indices[start_idx:end_idx]
+                    print(f"   Route 'prelabel_second_third': {len(route):,} images ({start_idx:,} - {end_idx:,} of {total_prelabeled:,} prelabeled)")
+                    return route
+                
+                elif strategy == "prelabel_last_third":
+                    start_idx = (total_prelabeled * 2) // 3
+                    route = indices[start_idx:]
+                    print(f"   Route 'prelabel_last_third': {len(route):,} images ({start_idx:,} - {total_prelabeled:,} of {total_prelabeled:,} prelabeled)")
+                    return route
+            
+            # If NOT filtered, need to find prelabels manually
             from config.config import LABELS_DIR
             import json
             
@@ -608,6 +637,19 @@ class DataLoader:
                         lambda row: self.get_image_path(row), axis=1
                     )
                 
+                # Normalize paths for comparison
+                import re
+                def normalize_path(path):
+                    path_str = str(path)
+                    match = re.search(r'SlitLamp[/\\]', path_str, re.IGNORECASE)
+                    if match:
+                        normalized = path_str[match.start():]
+                        normalized = normalized.replace('/', '\\').lower()
+                        return normalized
+                    return path_str.lower()
+                
+                ai_paths_normalized = {normalize_path(p) for p in ai_image_paths}
+                
                 # Find indices with prelabels
                 prelabeled_indices = []
                 other_indices = []
@@ -615,7 +657,8 @@ class DataLoader:
                 for idx in indices:
                     if self.merged_df is not None and idx < len(self.merged_df):
                         image_path = self.merged_df.iloc[idx].get('image_path')
-                        if image_path in ai_image_paths:
+                        normalized = normalize_path(image_path)
+                        if normalized in ai_paths_normalized:
                             prelabeled_indices.append(idx)
                         else:
                             other_indices.append(idx)
@@ -631,14 +674,12 @@ class DataLoader:
                     return route
                 
                 elif strategy == "prelabel_first_third":
-                    # First 33% of prelabeled images only
                     end_idx = total_prelabeled // 3
                     route = prelabeled_indices[:end_idx]
                     print(f"   Route 'prelabel_first_third': {len(route):,} images (1 - {end_idx:,} of {total_prelabeled:,} prelabeled)")
                     return route
                 
                 elif strategy == "prelabel_second_third":
-                    # Middle 33% of prelabeled images only
                     start_idx = total_prelabeled // 3
                     end_idx = (total_prelabeled * 2) // 3
                     route = prelabeled_indices[start_idx:end_idx]
@@ -646,7 +687,6 @@ class DataLoader:
                     return route
                 
                 elif strategy == "prelabel_last_third":
-                    # Last 33% of prelabeled images only
                     start_idx = (total_prelabeled * 2) // 3
                     route = prelabeled_indices[start_idx:]
                     print(f"   Route 'prelabel_last_third': {len(route):,} images ({start_idx:,} - {total_prelabeled:,} of {total_prelabeled:,} prelabeled)")
@@ -654,6 +694,8 @@ class DataLoader:
                 
             except Exception as e:
                 print(f"   Warning: Could not load AI prelabels for routing: {e}")
+                import traceback
+                traceback.print_exc()
                 return indices
         
         # ── Other strategies ────────────────────────────────────
