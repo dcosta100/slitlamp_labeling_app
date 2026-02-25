@@ -208,6 +208,10 @@ DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")
 # ======================================================
 
 ROUTE_STRATEGIES = {
+    "prelabel_first": "AI pre-labels first, then remaining images",
+    "prelabel_first_third": "AI pre-labels only - First third (1-33%)",
+    "prelabel_second_third": "AI pre-labels only - Second third (34-66%)",
+    "prelabel_last_third": "AI pre-labels only - Last third (67-100%)",
     "forward": "Start from beginning",
     "backward": "Start from end",
     "middle_out": "Start from middle",
@@ -241,7 +245,7 @@ DATASET_FILTER_OPTIONS = {
 
 DEFAULT_DATASET_FILTER = os.getenv(
     "DEFAULT_DATASET_FILTER",
-    "WITH_AI_PRELABEL"
+    "NOTES_AND_ANNOTATIONS"
 )
 
 # ======================================================

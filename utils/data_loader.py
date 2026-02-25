@@ -573,7 +573,7 @@ class DataLoader:
         
         Args:
             total_images: Total number of images
-            strategy: Routing strategy (forward, backward, middle_out, random, prelabel_first)
+            strategy: Routing strategy
             username: Username for seeding random routes
         
         Returns:
@@ -583,57 +583,80 @@ class DataLoader:
         
         indices = list(range(total_images))
         
-        if strategy == "prelabel_first":
-            # Show images with AI pre-labels first, then the rest
+        # ── Strategies that work with AI prelabels ──────────────
+        if strategy in ["prelabel_first", "prelabel_first_third", "prelabel_second_third", "prelabel_last_third"]:
             from config.config import LABELS_DIR
             import json
             
             ai_labels_file = LABELS_DIR / "AI_prelabel_labels.json"
             
-            if ai_labels_file.exists():
-                try:
-                    # Load AI prelabels
-                    with open(ai_labels_file, 'r', encoding='utf-8') as f:
-                        ai_data = json.load(f)
-                    
-                    ai_labels = ai_data.get('labels', {})
-                    ai_image_paths = set(ai_labels.keys())
-                    
-                    # Build image paths for current dataset if needed
-                    if self.merged_df is not None and 'image_path' not in self.merged_df.columns:
-                        self.merged_df['image_path'] = self.merged_df.apply(
-                            lambda row: self.get_image_path(row), axis=1
-                        )
-                    
-                    # Separate indices into prelabeled and non-prelabeled
-                    prelabeled_indices = []
-                    other_indices = []
-                    
-                    for idx in indices:
-                        if self.merged_df is not None and idx < len(self.merged_df):
-                            image_path = self.merged_df.iloc[idx].get('image_path')
-                            if image_path in ai_image_paths:
-                                prelabeled_indices.append(idx)
-                            else:
-                                other_indices.append(idx)
-                        else:
-                            other_indices.append(idx)
-                    
-                    # Combine: prelabeled first, then others
-                    route = prelabeled_indices + other_indices
-                    
-                    print(f"   Route strategy 'prelabel_first': {len(prelabeled_indices):,} with pre-labels, {len(other_indices):,} without")
-                    
-                    return route
-                    
-                except Exception as e:
-                    print(f"   Warning: Could not load AI prelabels for routing: {e}")
-                    # Fallback to forward
-                    return indices
-            else:
+            if not ai_labels_file.exists():
                 print(f"   Warning: AI_prelabel_labels.json not found, using forward strategy")
                 return indices
+            
+            try:
+                # Load AI prelabels
+                with open(ai_labels_file, 'r', encoding='utf-8') as f:
+                    ai_data = json.load(f)
+                
+                ai_labels = ai_data.get('labels', {})
+                ai_image_paths = set(ai_labels.keys())
+                
+                # Build image paths if needed
+                if self.merged_df is not None and 'image_path' not in self.merged_df.columns:
+                    self.merged_df['image_path'] = self.merged_df.apply(
+                        lambda row: self.get_image_path(row), axis=1
+                    )
+                
+                # Find indices with prelabels
+                prelabeled_indices = []
+                other_indices = []
+                
+                for idx in indices:
+                    if self.merged_df is not None and idx < len(self.merged_df):
+                        image_path = self.merged_df.iloc[idx].get('image_path')
+                        if image_path in ai_image_paths:
+                            prelabeled_indices.append(idx)
+                        else:
+                            other_indices.append(idx)
+                    else:
+                        other_indices.append(idx)
+                
+                total_prelabeled = len(prelabeled_indices)
+                
+                # ── Apply strategy ──────────────────────────────
+                if strategy == "prelabel_first":
+                    route = prelabeled_indices + other_indices
+                    print(f"   Route 'prelabel_first': {len(prelabeled_indices):,} with pre-labels, {len(other_indices):,} without")
+                    return route
+                
+                elif strategy == "prelabel_first_third":
+                    # First 33% of prelabeled images only
+                    end_idx = total_prelabeled // 3
+                    route = prelabeled_indices[:end_idx]
+                    print(f"   Route 'prelabel_first_third': {len(route):,} images (1 - {end_idx:,} of {total_prelabeled:,} prelabeled)")
+                    return route
+                
+                elif strategy == "prelabel_second_third":
+                    # Middle 33% of prelabeled images only
+                    start_idx = total_prelabeled // 3
+                    end_idx = (total_prelabeled * 2) // 3
+                    route = prelabeled_indices[start_idx:end_idx]
+                    print(f"   Route 'prelabel_second_third': {len(route):,} images ({start_idx:,} - {end_idx:,} of {total_prelabeled:,} prelabeled)")
+                    return route
+                
+                elif strategy == "prelabel_last_third":
+                    # Last 33% of prelabeled images only
+                    start_idx = (total_prelabeled * 2) // 3
+                    route = prelabeled_indices[start_idx:]
+                    print(f"   Route 'prelabel_last_third': {len(route):,} images ({start_idx:,} - {total_prelabeled:,} of {total_prelabeled:,} prelabeled)")
+                    return route
+                
+            except Exception as e:
+                print(f"   Warning: Could not load AI prelabels for routing: {e}")
+                return indices
         
+        # ── Other strategies ────────────────────────────────────
         elif strategy == "forward":
             return indices
         
@@ -641,7 +664,6 @@ class DataLoader:
             return list(reversed(indices))
         
         elif strategy == "middle_out":
-            # Start from middle and alternate outward
             middle = total_images // 2
             route = [middle]
             left = middle - 1
@@ -658,7 +680,6 @@ class DataLoader:
             return route
         
         elif strategy == "random":
-            # Use username as seed for reproducibility
             seed = hash(username) % (2**32) if username else 42
             rng = np.random.RandomState(seed)
             route = indices.copy()
@@ -666,7 +687,6 @@ class DataLoader:
             return route
         
         else:
-            # Default to forward
             return indices
             success, message = self.merge_datasets()
             if not success:
