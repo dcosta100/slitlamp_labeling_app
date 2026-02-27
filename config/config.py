@@ -55,12 +55,17 @@ DIAGNOSIS_PATH = _get_path_required("DIAGNOSIS_PATH")
 CROSS_PATH = _get_path_required("CROSS_PATH")
 ANNOTATIONS_PATH = _get_path_required("ANNOTATIONS_PATH")
 IMAGE_BASE_PATH = _get_path_required("IMAGE_BASE_PATH")
-ANONYMIZED_EHR_PATH = _get_path_required("ANONYMIZED_EHR_PATH")
-PREPROCESSED_PATH = _get_path("PREPROCESSED_PATH")
+ANONYMIZED_EHR_PATH = _get_path_required("NOTES_PATH")
 
 # Backward compatibility
 NOTES_PATH = ANONYMIZED_EHR_PATH
 
+
+# Preprocessed dataset path (recommended for faster loading)
+PREPROCESSED_PATH = os.getenv(
+    "PREPROCESSED_PATH",
+    r"C:\Projects_Local\slitlamp_labeling_app\data\preprocessed_dataset.parquet"
+)
 
 USE_PREPROCESSED = os.getenv("USE_PREPROCESSED", "True").lower() == "true"
 
