@@ -38,39 +38,29 @@ def _get_path(env_var, default_path, path_type="file"):
     
     return path
 
-DIAGNOSIS_PATH = _get_path(
-    "DIAGNOSIS_PATH",
-    r"C:\Users\dxr1276\OneDrive\Projects\Forevision\studyinfo_laterality_diagnosis.dta"
-)
+def _get_path_required(env_var):
+    """Get path from env, raise error if not set"""
+    path = os.getenv(env_var)
+    if not path or not path.strip():
+        raise ValueError(
+            f"\n{'='*70}\n"
+            f"ERROR: {env_var} not set in .env file!\n"
+            f"Please create a .env file and set all required paths.\n"
+            f"Copy .env.example to .env and edit with your paths.\n"
+            f"{'='*70}"
+        )
+    return path
 
-CROSS_PATH = _get_path(
-    "CROSS_PATH",
-    r"C:\Users\dxr1276\OneDrive\Projects\Forevision\slitlamp_crosswalk_complete_12082025.csv"
-)
+DIAGNOSIS_PATH = _get_path_required("DIAGNOSIS_PATH")
+CROSS_PATH = _get_path_required("CROSS_PATH")
+ANNOTATIONS_PATH = _get_path_required("ANNOTATIONS_PATH")
+IMAGE_BASE_PATH = _get_path_required("IMAGE_BASE_PATH")
+ANONYMIZED_EHR_PATH = _get_path_required("ANONYMIZED_EHR_PATH")
+PREPROCESSED_PATH = _get_path("PREPROCESSED_PATH")
 
-ANNOTATIONS_PATH = _get_path(
-    "ANNOTATIONS_PATH",
-    r"C:\Users\dxr1276\Box\PROJECTS\DOUGLAS\Files_code\Databases\_BPGR\BPGR_slexam_all.csv"
-)
-
-IMAGE_BASE_PATH = _get_path(
-    "IMAGE_BASE_PATH",
-    r"L:\SlitLamp"
-)
-
-ANONYMIZED_EHR_PATH = _get_path(
-    "ANONYMIZED_EHR_PATH",
-    r"C:\Projects_Local\slitlamp_labeling_app\preprocessing\ehr_anonymized_all.parquet"
-)
-
-# Backward compatibility: NOTES_PATH is alias for ANONYMIZED_EHR_PATH
+# Backward compatibility
 NOTES_PATH = ANONYMIZED_EHR_PATH
 
-# Preprocessed dataset path (recommended for faster loading)
-PREPROCESSED_PATH = os.getenv(
-    "PREPROCESSED_PATH",
-    r"C:\Projects_Local\slitlamp_labeling_app\data\preprocessed_dataset.parquet"
-)
 
 USE_PREPROCESSED = os.getenv("USE_PREPROCESSED", "True").lower() == "true"
 
