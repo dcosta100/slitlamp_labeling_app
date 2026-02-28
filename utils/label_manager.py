@@ -24,7 +24,8 @@ class LabelManager:
             "user": self.username,
             "created_at": datetime.now().strftime(DATETIME_FORMAT),
             "last_modified": datetime.now().strftime(DATETIME_FORMAT),
-            "labels": {}
+            "labels": {},
+            "current_position": 0  # Track position in route
         }
     
     def save_labels(self):
@@ -32,6 +33,15 @@ class LabelManager:
         self.labels["last_modified"] = datetime.now().strftime(DATETIME_FORMAT)
         with open(self.labels_file, 'w') as f:
             json.dump(self.labels, f, indent=2)
+    
+    def save_position(self, position):
+        """Save current position in route"""
+        self.labels["current_position"] = position
+        self.save_labels()
+    
+    def get_position(self):
+        """Get saved position in route"""
+        return self.labels.get("current_position", 0)
     
     def add_label(self, image_index, image_path, laterality, quality, 
                   conditions=None, metadata=None):

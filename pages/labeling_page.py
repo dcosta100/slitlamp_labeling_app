@@ -118,7 +118,13 @@ def show():
         total_images = data_loader.get_total_images()
         route_strategy = get_user_route_strategy(st.session_state.username)
         st.session_state.route_indices = data_loader.create_route(total_images, route_strategy, st.session_state.username)
-        st.session_state.current_position = 0
+        
+        # Load saved position
+        saved_position = label_manager.get_position()
+        st.session_state.current_position = saved_position
+        
+        if saved_position > 0:
+            st.info(f"ℹ️ Resuming from position {saved_position + 1}/{len(st.session_state.route_indices)}")
     
     route_indices = st.session_state.route_indices
     current_position = st.session_state.current_position
@@ -180,7 +186,7 @@ def show():
         # Notes
         notes = image_data.get('notes', [])
         if notes:
-            with st.expander(f"📝 EHR Notes ({len(notes)} found)", expanded=True):
+            with st.expander(f"📝 EHR Notes ({len(notes)} found)", expanded=False):
                 for i, note in enumerate(notes):
                     days_diff = note.get('days_diff', 0)
                     timing = "Same day" if days_diff == 0 else f"{abs(days_diff)} days {'before' if days_diff < 0 else 'after'}"
@@ -194,7 +200,7 @@ def show():
         # Annotations
         annotations = image_data.get('annotations', [])
         if annotations:
-            with st.expander(f"🔬 Annotations ({len(annotations)} found)", expanded=True):
+            with st.expander(f"🔬 Annotations ({len(annotations)} found)", expanded=False):
                 import pandas as pd
                 ann_by_lat = {}
                 for ann in annotations:
@@ -221,22 +227,29 @@ def show():
         with n1:
             if st.button("⏮️ First", use_container_width=True):
                 st.session_state.current_position = 0
+                label_manager.save_position(0)
                 st.session_state._reset_labels = True
                 st.rerun()
         with n2:
             if st.button("◀ Prev", use_container_width=True, help="← or A"):
                 if current_position > 0:
-                    st.session_state.current_position -= 1
+                    new_pos = current_position - 1
+                    st.session_state.current_position = new_pos
+                    label_manager.save_position(new_pos)
                     st.session_state._reset_labels = True
                     st.rerun()
         with n3:
             if st.button("Next ▶", use_container_width=True, help="→ or D"):
-                st.session_state.current_position += 1
+                new_pos = current_position + 1
+                st.session_state.current_position = new_pos
+                label_manager.save_position(new_pos)
                 st.session_state._reset_labels = True
                 st.rerun()
         with n4:
             if st.button("Last ⏭️", use_container_width=True):
-                st.session_state.current_position = len(route_indices) - 1
+                new_pos = len(route_indices) - 1
+                st.session_state.current_position = new_pos
+                label_manager.save_position(new_pos)
                 st.session_state._reset_labels = True
                 st.rerun()
         
@@ -264,7 +277,7 @@ def show():
             st.markdown("#### 🔬 Conditions")
             
             # Dry Eye
-            with st.expander("👁️ Dry Eye Disease", expanded=True):
+            with st.expander("👁️ Dry Eye Disease", expanded=st.session_state.dry_eye_severity != "None"):
                 dry_sev = st.selectbox("Severity", DRY_EYE_SEVERITY,
                                       index=DRY_EYE_SEVERITY.index(st.session_state.dry_eye_severity), key="dry_sev_select")
                 st.session_state.dry_eye_severity = dry_sev
@@ -276,7 +289,7 @@ def show():
                     conditions_data["Dry Eye Disease"] = {"severity": dry_sev, "signs": dry_signs}
             
             # Cataract
-            with st.expander("🔍 Cataract", expanded=True):
+            with st.expander("🔍 Cataract", expanded=st.session_state.cataract_type != "None"):
                 cat_type = st.selectbox("Type", CATARACT_TYPE,
                                        index=CATARACT_TYPE.index(st.session_state.cataract_type), key="cat_type_select")
                 st.session_state.cataract_type = cat_type
@@ -294,7 +307,7 @@ def show():
                     conditions_data["Cataract"] = {"type": cat_type, "severity": None, "features": []}
             
             # Infectious
-            with st.expander("🦠 Infectious", expanded=True):
+            with st.expander("🦠 Infectious", expanded=st.session_state.infectious_type != "No infection"):
                 inf_type = st.selectbox("Type", INFECTIOUS_TYPE,
                                        index=INFECTIOUS_TYPE.index(st.session_state.infectious_type), key="inf_type_select")
                 st.session_state.infectious_type = inf_type
@@ -327,7 +340,7 @@ def show():
                     conditions_data["Infectious Keratitis / Conjunctivitis"] = {"type": inf_type}
             
             # Tumor
-            with st.expander("🔬 Tumor", expanded=True):
+            with st.expander("🔬 Tumor", expanded=st.session_state.tumor_type != "No lesion"):
                 tumor_type = st.selectbox("Type", TUMOR_TYPE,
                                          index=TUMOR_TYPE.index(st.session_state.tumor_type), key="tumor_type_select")
                 st.session_state.tumor_type = tumor_type
@@ -349,7 +362,7 @@ def show():
                     conditions_data["Ocular Surface Tumors"] = {"type": tumor_type}
             
             # SCH
-            with st.expander("🩸 SCH", expanded=True):
+            with st.expander("🩸 SCH", expanded=st.session_state.sch_presence == "Present"):
                 sch_pres = st.selectbox("Presence", SCH_PRESENCE,
                                        index=SCH_PRESENCE.index(st.session_state.sch_presence), key="sch_pres_select")
                 st.session_state.sch_presence = sch_pres
@@ -381,11 +394,15 @@ def show():
                 )
                 st.success("✅ Saved!")
                 st.session_state.labels_saved = st.session_state.get('labels_saved', 0) + 1
-                st.session_state.current_position += 1
+                new_pos = current_position + 1
+                st.session_state.current_position = new_pos
+                label_manager.save_position(new_pos)
                 st.session_state._reset_labels = True
                 st.rerun()
         with b2:
             if st.button("⏭️ Skip", use_container_width=True):
-                st.session_state.current_position += 1
+                new_pos = current_position + 1
+                st.session_state.current_position = new_pos
+                label_manager.save_position(new_pos)
                 st.session_state._reset_labels = True
                 st.rerun()

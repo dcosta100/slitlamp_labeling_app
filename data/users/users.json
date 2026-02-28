@@ -23,6 +23,12 @@
       "role": "labeler",
       "created_at": "2026-02-25T14:34:43.698561",
       "route_strategy": "prelabel_first"
+    },
+    "taka": {
+      "password": "e07a071789c69cd61505bf469af9096580df0eafe5469be923c4a924404e92a4",
+      "role": "labeler",
+      "created_at": "2026-02-28T11:13:31.353397",
+      "route_strategy": "prelabel_second_third"
     }
   }
 }
