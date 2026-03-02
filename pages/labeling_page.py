@@ -49,33 +49,148 @@ def initialize_label_state(source_label):
         
         conditions = source_label.get('conditions', {}) if source_label else {}
         
+        # Helper to get valid option or default
+        def get_valid_option(value, options, default=None):
+            """Return value if in options, else return default (or first option)"""
+            if value in options:
+                return value
+            return default if default else options[0]
+        
         # Dry Eye
-        st.session_state.dry_eye_severity = conditions.get('Dry Eye Disease', {}).get('severity', 'None')
-        st.session_state.dry_eye_signs = conditions.get('Dry Eye Disease', {}).get('signs', [])
+        st.session_state.dry_eye_severity = get_valid_option(
+            conditions.get('Dry Eye Disease', {}).get('severity', 'None'),
+            DRY_EYE_SEVERITY, 'None'
+        )
+        st.session_state.dry_eye_signs = [s for s in conditions.get('Dry Eye Disease', {}).get('signs', []) if s in DRY_EYE_SIGNS]
         
         # Cataract
-        st.session_state.cataract_type = conditions.get('Cataract', {}).get('type', 'None')
-        st.session_state.cataract_severity = conditions.get('Cataract', {}).get('severity', 'Mild')
-        st.session_state.cataract_features = conditions.get('Cataract', {}).get('features', [])
+        st.session_state.cataract_type = get_valid_option(
+            conditions.get('Cataract', {}).get('type', 'None'),
+            CATARACT_TYPE, 'None'
+        )
+        st.session_state.cataract_severity = get_valid_option(
+            conditions.get('Cataract', {}).get('severity', 'Mild'),
+            CATARACT_SEVERITY, 'Mild'
+        )
+        st.session_state.cataract_features = [f for f in conditions.get('Cataract', {}).get('features', []) if f in CATARACT_FEATURES]
         
         # Infectious
-        st.session_state.infectious_type = conditions.get('Infectious Keratitis / Conjunctivitis', {}).get('type', 'No infection')
-        st.session_state.infectious_etiology = conditions.get('Infectious Keratitis / Conjunctivitis', {}).get('etiology', INFECTIOUS_ETIOLOGY[0])
-        st.session_state.keratitis_size = conditions.get('Infectious Keratitis / Conjunctivitis', {}).get('keratitis_size', KERATITIS_SIZE[0])
-        st.session_state.keratitis_features = conditions.get('Infectious Keratitis / Conjunctivitis', {}).get('keratitis_features', [])
-        st.session_state.conjunctivitis_features = conditions.get('Infectious Keratitis / Conjunctivitis', {}).get('conjunctivitis_features', [])
+        st.session_state.infectious_type = get_valid_option(
+            conditions.get('Infectious Keratitis / Conjunctivitis', {}).get('type', 'No infection'),
+            INFECTIOUS_TYPE, 'No infection'
+        )
+        st.session_state.infectious_etiology = get_valid_option(
+            conditions.get('Infectious Keratitis / Conjunctivitis', {}).get('etiology', INFECTIOUS_ETIOLOGY[0]),
+            INFECTIOUS_ETIOLOGY
+        )
+        st.session_state.keratitis_size = get_valid_option(
+            conditions.get('Infectious Keratitis / Conjunctivitis', {}).get('keratitis_size', KERATITIS_SIZE[0]),
+            KERATITIS_SIZE
+        )
+        st.session_state.keratitis_features = [f for f in conditions.get('Infectious Keratitis / Conjunctivitis', {}).get('keratitis_features', []) if f in KERATITIS_FEATURES]
+        st.session_state.conjunctivitis_features = [f for f in conditions.get('Infectious Keratitis / Conjunctivitis', {}).get('conjunctivitis_features', []) if f in CONJUNCTIVITIS_FEATURES]
         
         # Tumor
-        st.session_state.tumor_type = conditions.get('Ocular Surface Tumors', {}).get('type', 'No lesion')
-        st.session_state.tumor_malignancy = conditions.get('Ocular Surface Tumors', {}).get('malignancy', TUMOR_MALIGNANCY[0])
-        st.session_state.tumor_location = conditions.get('Ocular Surface Tumors', {}).get('location', TUMOR_LOCATION[0])
-        st.session_state.tumor_features = conditions.get('Ocular Surface Tumors', {}).get('features', [])
+        st.session_state.tumor_type = get_valid_option(
+            conditions.get('Ocular Surface Tumors', {}).get('type', 'No lesion'),
+            TUMOR_TYPE, 'No lesion'
+        )
+        st.session_state.tumor_malignancy = get_valid_option(
+            conditions.get('Ocular Surface Tumors', {}).get('malignancy', TUMOR_MALIGNANCY[0]),
+            TUMOR_MALIGNANCY
+        )
+        st.session_state.tumor_location = get_valid_option(
+            conditions.get('Ocular Surface Tumors', {}).get('location', TUMOR_LOCATION[0]),
+            TUMOR_LOCATION
+        )
+        st.session_state.tumor_features = [f for f in conditions.get('Ocular Surface Tumors', {}).get('features', []) if f in TUMOR_FEATURES]
         
         # SCH
-        st.session_state.sch_presence = conditions.get('Subconjunctival Hemorrhage', {}).get('presence', 'None')
-        st.session_state.sch_extent = conditions.get('Subconjunctival Hemorrhage', {}).get('extent', SCH_EXTENT[0])
+        st.session_state.sch_presence = get_valid_option(
+            conditions.get('Subconjunctival Hemorrhage', {}).get('presence', 'None'),
+            SCH_PRESENCE, 'None'
+        )
+        st.session_state.sch_extent = get_valid_option(
+            conditions.get('Subconjunctival Hemorrhage', {}).get('extent', SCH_EXTENT[0]),
+            SCH_EXTENT
+        )
         
         st.session_state._reset_labels = False
+
+def _collect_conditions_data():
+    """Collect conditions data from session state"""
+    conditions_data = {}
+    
+    if st.session_state.label_quality != "Usable":
+        return conditions_data
+    
+    # Dry Eye
+    if st.session_state.dry_eye_severity != "None":
+        conditions_data["Dry Eye Disease"] = {
+            "severity": st.session_state.dry_eye_severity,
+            "signs": st.session_state.dry_eye_signs
+        }
+    
+    # Cataract
+    if st.session_state.cataract_type != "None":
+        if st.session_state.cataract_type not in ["Pseudophakia", "Aphakia"]:
+            conditions_data["Cataract"] = {
+                "type": st.session_state.cataract_type,
+                "severity": st.session_state.cataract_severity,
+                "features": st.session_state.cataract_features
+            }
+        else:
+            conditions_data["Cataract"] = {
+                "type": st.session_state.cataract_type,
+                "severity": None,
+                "features": []
+            }
+    
+    # Infectious
+    if st.session_state.infectious_type != "No infection":
+        if st.session_state.infectious_type not in ["Unclear"]:
+            inf_data = {
+                "type": st.session_state.infectious_type,
+                "etiology": st.session_state.infectious_etiology
+            }
+            if "Keratitis" in st.session_state.infectious_type:
+                inf_data["keratitis_size"] = st.session_state.keratitis_size
+                inf_data["keratitis_features"] = st.session_state.keratitis_features
+            if "Conjunctivitis" in st.session_state.infectious_type:
+                inf_data["conjunctivitis_features"] = st.session_state.conjunctivitis_features
+            conditions_data["Infectious Keratitis / Conjunctivitis"] = inf_data
+        else:
+            conditions_data["Infectious Keratitis / Conjunctivitis"] = {
+                "type": st.session_state.infectious_type
+            }
+    
+    # Tumor
+    if st.session_state.tumor_type != "No lesion":
+        if st.session_state.tumor_type not in ["Unclear"]:
+            conditions_data["Ocular Surface Tumors"] = {
+                "type": st.session_state.tumor_type,
+                "malignancy": st.session_state.tumor_malignancy,
+                "location": st.session_state.tumor_location,
+                "features": st.session_state.tumor_features
+            }
+        else:
+            conditions_data["Ocular Surface Tumors"] = {
+                "type": st.session_state.tumor_type
+            }
+    
+    # SCH
+    if st.session_state.sch_presence != "None":
+        if st.session_state.sch_presence == "Present":
+            conditions_data["Subconjunctival Hemorrhage"] = {
+                "presence": st.session_state.sch_presence,
+                "extent": st.session_state.sch_extent
+            }
+        else:
+            conditions_data["Subconjunctival Hemorrhage"] = {
+                "presence": st.session_state.sch_presence
+            }
+    
+    return conditions_data
 
 def show():
     """Show labeling page"""
@@ -119,11 +234,30 @@ def show():
         route_strategy = get_user_route_strategy(st.session_state.username)
         st.session_state.route_indices = data_loader.create_route(total_images, route_strategy, st.session_state.username)
         
-        # Load saved position
+        # Load saved position OR find first unlabeled
         saved_position = label_manager.get_position()
-        st.session_state.current_position = saved_position
         
-        if saved_position > 0:
+        # Find first unlabeled image from saved position onwards
+        route_indices_temp = st.session_state.route_indices
+        first_unlabeled = saved_position
+        
+        for i in range(saved_position, len(route_indices_temp)):
+            if not label_manager.is_labeled(route_indices_temp[i]):
+                first_unlabeled = i
+                break
+        else:
+            # All images from saved_position onwards are labeled
+            # Try from beginning
+            for i in range(len(route_indices_temp)):
+                if not label_manager.is_labeled(route_indices_temp[i]):
+                    first_unlabeled = i
+                    break
+        
+        st.session_state.current_position = first_unlabeled
+        
+        if first_unlabeled != saved_position:
+            st.info(f"ℹ️ Skipped to first unlabeled image at position {first_unlabeled + 1}/{len(st.session_state.route_indices)}")
+        elif saved_position > 0:
             st.info(f"ℹ️ Resuming from position {saved_position + 1}/{len(st.session_state.route_indices)}")
     
     route_indices = st.session_state.route_indices
@@ -223,7 +357,8 @@ def show():
         st.progress(progress)
         st.caption(f"Position: **{current_position + 1}** / {len(route_indices)} | Labeled: **{label_manager.get_labeled_count()}**")
         
-        n1, n2, n3, n4 = st.columns(4)
+        # Top buttons: Navigation + Save
+        n1, n2, n3, n4, n5 = st.columns([1, 1, 1, 1, 1.5])
         with n1:
             if st.button("⏮️ First", use_container_width=True):
                 st.session_state.current_position = 0
@@ -248,6 +383,51 @@ def show():
         with n4:
             if st.button("Last ⏭️", use_container_width=True):
                 new_pos = len(route_indices) - 1
+                st.session_state.current_position = new_pos
+                label_manager.save_position(new_pos)
+                st.session_state._reset_labels = True
+                st.rerun()
+        with n5:
+            # Save button at top (same as bottom)
+            if st.button("💾 Save Label", use_container_width=True, type="primary", key="save_top"):
+                conditions_data = _collect_conditions_data()
+                label_manager.add_label(
+                    image_index=current_index,
+                    image_path=image_data['image_path'],
+                    laterality=st.session_state.label_laterality,
+                    quality=st.session_state.label_quality,
+                    conditions=conditions_data,
+                    metadata={
+                        'maskedid_studyid': image_data.get('maskedid_studyid'),
+                        'exam_date': str(image_data.get('exam_date')),
+                        'pat_mrn': image_data.get('pat_mrn')
+                    }
+                )
+                st.success("✅ Saved!")
+                st.session_state.labels_saved = st.session_state.get('labels_saved', 0) + 1
+                new_pos = current_position + 1
+                st.session_state.current_position = new_pos
+                label_manager.save_position(new_pos)
+                st.session_state._reset_labels = True
+                st.rerun()
+        
+        # Go to specific position
+        st.markdown("---")
+        goto_col1, goto_col2 = st.columns([3, 1])
+        with goto_col1:
+            goto_pos = st.number_input(
+                "Jump to position:",
+                min_value=1,
+                max_value=len(route_indices),
+                value=current_position + 1,
+                step=1,
+                key="goto_input",
+                help="Enter position number (1 to {})".format(len(route_indices))
+            )
+        with goto_col2:
+            st.markdown("<br>", unsafe_allow_html=True)  # Align button
+            if st.button("Go", use_container_width=True):
+                new_pos = goto_pos - 1  # Convert to 0-indexed
                 st.session_state.current_position = new_pos
                 label_manager.save_position(new_pos)
                 st.session_state._reset_labels = True
@@ -277,7 +457,7 @@ def show():
             st.markdown("#### 🔬 Conditions")
             
             # Dry Eye
-            with st.expander("👁️ Dry Eye Disease", expanded=st.session_state.dry_eye_severity != "None"):
+            with st.expander("👁️ Dry Eye Disease", expanded=True):
                 dry_sev = st.selectbox("Severity", DRY_EYE_SEVERITY,
                                       index=DRY_EYE_SEVERITY.index(st.session_state.dry_eye_severity), key="dry_sev_select")
                 st.session_state.dry_eye_severity = dry_sev
@@ -289,7 +469,7 @@ def show():
                     conditions_data["Dry Eye Disease"] = {"severity": dry_sev, "signs": dry_signs}
             
             # Cataract
-            with st.expander("🔍 Cataract", expanded=st.session_state.cataract_type != "None"):
+            with st.expander("🔍 Cataract", expanded=True):
                 cat_type = st.selectbox("Type", CATARACT_TYPE,
                                        index=CATARACT_TYPE.index(st.session_state.cataract_type), key="cat_type_select")
                 st.session_state.cataract_type = cat_type
@@ -307,7 +487,7 @@ def show():
                     conditions_data["Cataract"] = {"type": cat_type, "severity": None, "features": []}
             
             # Infectious
-            with st.expander("🦠 Infectious", expanded=st.session_state.infectious_type != "No infection"):
+            with st.expander("🦠 Infectious", expanded=True):
                 inf_type = st.selectbox("Type", INFECTIOUS_TYPE,
                                        index=INFECTIOUS_TYPE.index(st.session_state.infectious_type), key="inf_type_select")
                 st.session_state.infectious_type = inf_type
@@ -340,7 +520,7 @@ def show():
                     conditions_data["Infectious Keratitis / Conjunctivitis"] = {"type": inf_type}
             
             # Tumor
-            with st.expander("🔬 Tumor", expanded=st.session_state.tumor_type != "No lesion"):
+            with st.expander("🔬 Tumor", expanded=True):
                 tumor_type = st.selectbox("Type", TUMOR_TYPE,
                                          index=TUMOR_TYPE.index(st.session_state.tumor_type), key="tumor_type_select")
                 st.session_state.tumor_type = tumor_type
@@ -362,7 +542,7 @@ def show():
                     conditions_data["Ocular Surface Tumors"] = {"type": tumor_type}
             
             # SCH
-            with st.expander("🩸 SCH", expanded=st.session_state.sch_presence == "Present"):
+            with st.expander("🩸 SCH", expanded=True):
                 sch_pres = st.selectbox("Presence", SCH_PRESENCE,
                                        index=SCH_PRESENCE.index(st.session_state.sch_presence), key="sch_pres_select")
                 st.session_state.sch_presence = sch_pres
@@ -380,11 +560,12 @@ def show():
         b1, b2 = st.columns(2)
         with b1:
             if st.button("💾 Save Label", use_container_width=True, type="primary"):
+                conditions_data = _collect_conditions_data()
                 label_manager.add_label(
                     image_index=current_index,
                     image_path=image_data['image_path'],
-                    laterality=laterality,
-                    quality=quality,
+                    laterality=st.session_state.label_laterality,
+                    quality=st.session_state.label_quality,
                     conditions=conditions_data,
                     metadata={
                         'maskedid_studyid': image_data.get('maskedid_studyid'),
