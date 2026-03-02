@@ -193,18 +193,6 @@ def _collect_conditions_data():
     return conditions_data
 
 def show():
-    """Show login page"""
-    
-    # Hide sidebar
-    st.set_page_config(page_title="Login", layout="wide", initial_sidebar_state="collapsed")
-    # OU se já tem set_page_config, adicione:
-    st.markdown("""
-        <style>
-        [data-testid="stSidebar"] {
-            display: none;
-        }
-        </style>
-    """, unsafe_allow_html=True)
     """Show labeling page"""
     
     st.markdown('<p class="main-header">🏷️ Image Labeling Interface</p>', unsafe_allow_html=True)
@@ -287,10 +275,27 @@ def show():
     
     existing_label = label_manager.get_label(current_index)
     ai_suggestion = None
+    same_study_label = None
+    
+    # Check for AI suggestion
     if not existing_label:
         ai_suggestion = ai_label_manager.get_label_by_path(image_data['image_path'])
     
-    source_label = existing_label or ai_suggestion
+    # Check for same studyid label (from current user - higher priority than AI)
+    if not existing_label:
+        from config.config import ENABLE_AUTOFILL_SAME_STUDYID
+        if ENABLE_AUTOFILL_SAME_STUDYID:
+            current_studyid = image_data.get('maskedid_studyid')
+            if current_studyid:
+                # Find last labeled image with same studyid
+                for idx in reversed(route_indices[:current_position]):
+                    prev_label = label_manager.get_label(idx)
+                    if prev_label and prev_label.get('metadata', {}).get('maskedid_studyid') == current_studyid:
+                        same_study_label = prev_label
+                        break
+    
+    # Priority: same_study_label > ai_suggestion > None
+    source_label = existing_label or same_study_label or ai_suggestion
     
     # Initialize state for this image
     initialize_label_state(source_label)
@@ -447,10 +452,12 @@ def show():
         
         st.markdown("---")
         
-        if ai_suggestion and not existing_label:
-            st.info("💡 **AI Suggestion** — review and save if correct")
         if existing_label:
             st.info(f"✏️ **Previously Labeled** on {existing_label.get('labeled_at','')}")
+        elif same_study_label:
+            st.success(f"🔄 **Auto-filled from same study** (maskedid_studyid: {image_data.get('maskedid_studyid', 'N/A')})")
+        elif ai_suggestion:
+            st.info("💡 **AI Suggestion** — review and save if correct")
         
         # Labels (NO FORM - direct widgets)
         st.markdown("### 🏷️ Label This Image")
@@ -469,7 +476,7 @@ def show():
             st.markdown("#### 🔬 Conditions")
             
             # Dry Eye
-            with st.expander("👁️ Dry Eye Disease", expanded=True):
+            with st.expander("👁️ Dry Eye Disease", expanded=st.session_state.dry_eye_severity != "None"):
                 dry_sev = st.selectbox("Severity", DRY_EYE_SEVERITY,
                                       index=DRY_EYE_SEVERITY.index(st.session_state.dry_eye_severity), key="dry_sev_select")
                 st.session_state.dry_eye_severity = dry_sev
@@ -481,7 +488,7 @@ def show():
                     conditions_data["Dry Eye Disease"] = {"severity": dry_sev, "signs": dry_signs}
             
             # Cataract
-            with st.expander("🔍 Cataract", expanded=True):
+            with st.expander("🔍 Cataract", expanded=st.session_state.cataract_type != "None"):
                 cat_type = st.selectbox("Type", CATARACT_TYPE,
                                        index=CATARACT_TYPE.index(st.session_state.cataract_type), key="cat_type_select")
                 st.session_state.cataract_type = cat_type
@@ -499,7 +506,7 @@ def show():
                     conditions_data["Cataract"] = {"type": cat_type, "severity": None, "features": []}
             
             # Infectious
-            with st.expander("🦠 Infectious", expanded=True):
+            with st.expander("🦠 Infectious", expanded=st.session_state.infectious_type != "No infection"):
                 inf_type = st.selectbox("Type", INFECTIOUS_TYPE,
                                        index=INFECTIOUS_TYPE.index(st.session_state.infectious_type), key="inf_type_select")
                 st.session_state.infectious_type = inf_type
@@ -532,7 +539,7 @@ def show():
                     conditions_data["Infectious Keratitis / Conjunctivitis"] = {"type": inf_type}
             
             # Tumor
-            with st.expander("🔬 Tumor", expanded=True):
+            with st.expander("🔬 Tumor", expanded=st.session_state.tumor_type != "No lesion"):
                 tumor_type = st.selectbox("Type", TUMOR_TYPE,
                                          index=TUMOR_TYPE.index(st.session_state.tumor_type), key="tumor_type_select")
                 st.session_state.tumor_type = tumor_type
@@ -554,7 +561,7 @@ def show():
                     conditions_data["Ocular Surface Tumors"] = {"type": tumor_type}
             
             # SCH
-            with st.expander("🩸 SCH", expanded=True):
+            with st.expander("🩸 SCH", expanded=st.session_state.sch_presence == "Present"):
                 sch_pres = st.selectbox("Presence", SCH_PRESENCE,
                                        index=SCH_PRESENCE.index(st.session_state.sch_presence), key="sch_pres_select")
                 st.session_state.sch_presence = sch_pres
