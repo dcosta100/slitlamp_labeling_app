@@ -193,6 +193,18 @@ def _collect_conditions_data():
     return conditions_data
 
 def show():
+    """Show login page"""
+    
+    # Hide sidebar
+    st.set_page_config(page_title="Login", layout="wide", initial_sidebar_state="collapsed")
+    # OU se já tem set_page_config, adicione:
+    st.markdown("""
+        <style>
+        [data-testid="stSidebar"] {
+            display: none;
+        }
+        </style>
+    """, unsafe_allow_html=True)
     """Show labeling page"""
     
     st.markdown('<p class="main-header">🏷️ Image Labeling Interface</p>', unsafe_allow_html=True)

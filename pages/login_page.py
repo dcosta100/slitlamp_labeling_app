@@ -8,6 +8,18 @@ from utils.auth import authenticate_user
 def show():
     """Show login page"""
     
+    # Hide sidebar
+    st.set_page_config(page_title="Login", layout="wide", initial_sidebar_state="collapsed")
+    # OU se já tem set_page_config, adicione:
+    st.markdown("""
+        <style>
+        [data-testid="stSidebar"] {
+            display: none;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    """Show login page"""
+    
     # Center the login form
     col1, col2, col3 = st.columns([1, 2, 1])
     
