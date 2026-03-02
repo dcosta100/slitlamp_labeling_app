@@ -18,7 +18,7 @@ class LabelManager:
     def load_labels(self):
         """Load existing labels for this user"""
         if self.labels_file.exists():
-            with open(self.labels_file, 'r') as f:
+            with open(self.labels_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         return {
             "user": self.username,
@@ -31,8 +31,8 @@ class LabelManager:
     def save_labels(self):
         """Save labels to file"""
         self.labels["last_modified"] = datetime.now().strftime(DATETIME_FORMAT)
-        with open(self.labels_file, 'w') as f:
-            json.dump(self.labels, f, indent=2)
+        with open(self.labels_file, 'w', encoding='utf-8') as f:
+            json.dump(self.labels, f, indent=2, ensure_ascii=False)
     
     def save_position(self, position):
         """Save current position in route"""
@@ -351,7 +351,7 @@ class LabelManager:
         for labels_file in LABELS_DIR.glob("*_labels.json"):
             username = labels_file.stem.replace("_labels", "")
             
-            with open(labels_file, 'r') as f:
+            with open(labels_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
             manager = LabelManager(username)

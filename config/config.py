@@ -150,11 +150,12 @@ INFECTIOUS_TYPE = [
     "Unclear"
 ]
 INFECTIOUS_ETIOLOGY = [
+    "Unknown",
     "Bacterial",
     "Fungal",
     "Herpetic",
-    "Acanthamoeba",
-    "Unknown"
+    "Acanthamoeba"
+    
 ]
 KERATITIS_SIZE = ["<2 mm", "2–5 mm", ">5 mm"]
 KERATITIS_FEATURES = [
