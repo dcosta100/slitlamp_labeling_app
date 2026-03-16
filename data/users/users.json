@@ -29,6 +29,12 @@
       "role": "labeler",
       "created_at": "2026-02-28T11:13:31.353397",
       "route_strategy": "prelabel_second_third"
+    },
+    "theo": {
+      "password": "4fcecc35d6fa20440109cc00f1dd93336c4d1ddd23bbaa0983ce10908c1af050",
+      "role": "labeler",
+      "created_at": "2026-03-16T11:00:24.945220",
+      "route_strategy": "prelabel_second_third"
     }
   }
 }
