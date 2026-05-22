@@ -11,6 +11,7 @@ from utils.label_manager import LabelManager
 from utils.auth import get_user_route_strategy
 from config.config import (
     LATERALITY_OPTIONS, QUALITY_OPTIONS,
+    ILLUMINATION_OPTIONS, ILLUMINATION_NOT_SPECIFIED,
     DRY_EYE_SEVERITY, DRY_EYE_SIGNS,
     CATARACT_TYPE, CATARACT_SEVERITY, CATARACT_FEATURES,
     INFECTIOUS_TYPE, INFECTIOUS_ETIOLOGY,
@@ -46,7 +47,11 @@ def initialize_label_state(source_label):
     if 'label_laterality' not in st.session_state or st.session_state.get('_reset_labels'):
         st.session_state.label_laterality = source_label.get('laterality', LATERALITY_OPTIONS[0]) if source_label else LATERALITY_OPTIONS[0]
         st.session_state.label_quality = source_label.get('quality', QUALITY_OPTIONS[0]) if source_label else QUALITY_OPTIONS[0]
-        
+
+        # Illumination is optional; older labels (and AI pre-labels) may not have it
+        illum = source_label.get('illumination') if source_label else None
+        st.session_state.label_illumination = illum if illum in ILLUMINATION_OPTIONS else ILLUMINATION_NOT_SPECIFIED
+
         conditions = source_label.get('conditions', {}) if source_label else {}
         
         # Helper to get valid option or default
@@ -116,6 +121,11 @@ def initialize_label_state(source_label):
         )
         
         st.session_state._reset_labels = False
+
+def _collect_illumination():
+    """Return the selected illumination, or None if not specified"""
+    val = st.session_state.get('label_illumination', ILLUMINATION_NOT_SPECIFIED)
+    return None if val == ILLUMINATION_NOT_SPECIFIED else val
 
 def _collect_conditions_data():
     """Collect conditions data from session state"""
@@ -413,6 +423,7 @@ def show():
                     image_path=image_data['image_path'],
                     laterality=st.session_state.label_laterality,
                     quality=st.session_state.label_quality,
+                    illumination=_collect_illumination(),
                     conditions=conditions_data,
                     metadata={
                         'maskedid_studyid': image_data.get('maskedid_studyid'),
@@ -469,7 +480,17 @@ def show():
         quality = st.selectbox("Image Quality *", QUALITY_OPTIONS,
                               index=QUALITY_OPTIONS.index(st.session_state.label_quality), key="qual_select")
         st.session_state.label_quality = quality
-        
+
+        # Illumination (optional)
+        illum_choices = [ILLUMINATION_NOT_SPECIFIED] + ILLUMINATION_OPTIONS
+        illumination = st.selectbox(
+            "Illumination", illum_choices,
+            index=illum_choices.index(st.session_state.label_illumination),
+            key="illum_select",
+            help="Slit lamp illumination technique (optional)"
+        )
+        st.session_state.label_illumination = illumination
+
         conditions_data = {}
         
         if quality == "Usable":
@@ -585,6 +606,7 @@ def show():
                     image_path=image_data['image_path'],
                     laterality=st.session_state.label_laterality,
                     quality=st.session_state.label_quality,
+                    illumination=_collect_illumination(),
                     conditions=conditions_data,
                     metadata={
                         'maskedid_studyid': image_data.get('maskedid_studyid'),

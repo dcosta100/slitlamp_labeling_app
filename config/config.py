@@ -95,6 +95,20 @@ LATERALITY_OPTIONS = ["Left", "Right", "Not Possible to Determine"]
 # Quality options (first choice)
 QUALITY_OPTIONS = ["Usable", "Non Usable"]
 
+# Illumination technique (optional field; standard slit lamp techniques).
+# Backward-compatible: labels created before this field simply omit it.
+ILLUMINATION_NOT_SPECIFIED = "Not specified"
+ILLUMINATION_OPTIONS = [
+    "Direct",
+    "Indirect",
+    "Slit beam",
+    "Diffuse",
+    "Sclerotic scatter",
+    "Retroillumination",
+    "Specular reflection",
+    "Tangential",
+]
+
 # Main diagnostic categories (MULTILABEL)
 DIAGNOSTIC_CATEGORIES = [
     "Dry Eye Disease",
@@ -226,11 +240,21 @@ ROUTE_STRATEGIES = {
     "prelabel_first_third": "AI pre-labels only - First third (1-33%)",
     "prelabel_second_third": "AI pre-labels only - Second third (34-66%)",
     "prelabel_last_third": "AI pre-labels only - Last third (67-100%)",
+    # Sixths: AI pre-labels split into 6 equal contiguous parts
+    "prelabel_1_6": "AI pre-labels only - 1st sixth (0-16%)",
+    "prelabel_2_6": "AI pre-labels only - 2nd sixth (17-33%)",
+    "prelabel_3_6": "AI pre-labels only - 3rd sixth (34-50%)",
+    "prelabel_4_6": "AI pre-labels only - 4th sixth (51-66%)",
+    "prelabel_5_6": "AI pre-labels only - 5th sixth (67-83%)",
+    "prelabel_6_6": "AI pre-labels only - 6th sixth (84-100%)",
     "forward": "Start from beginning",
     "backward": "Start from end",
     "middle_out": "Start from middle",
     "random": "Random order (seeded by user)"
 }
+
+# Set of all "sixth" strategy names, mapped to their part number (1-6)
+PRELABEL_SIXTH_STRATEGIES = {f"prelabel_{k}_6": k for k in range(1, 7)}
 
 # ======================================================
 # Application settings

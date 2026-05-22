@@ -580,12 +580,25 @@ class DataLoader:
             List of indices in the desired order
         """
         import numpy as np
-        
+        from config.config import PRELABEL_SIXTH_STRATEGIES
+
         indices = list(range(total_images))
-        
+
+        def _slice_part(seq, part, total_parts):
+            """Return the `part`-th (1-indexed) contiguous slice of `seq` out of `total_parts`."""
+            length = len(seq)
+            start = ((part - 1) * length) // total_parts
+            end = (part * length) // total_parts
+            return seq[start:end], start, end
+
+        prelabel_strategies = (
+            ["prelabel_first", "prelabel_first_third", "prelabel_second_third", "prelabel_last_third"]
+            + list(PRELABEL_SIXTH_STRATEGIES.keys())
+        )
+
         # ── Strategies that work with AI prelabels ──────────────
-        if strategy in ["prelabel_first", "prelabel_first_third", "prelabel_second_third", "prelabel_last_third"]:
-            
+        if strategy in prelabel_strategies:
+
             # If we're already filtered to WITH_AI_PRELABEL, all indices have prelabels
             if self.filter_mode == "WITH_AI_PRELABEL":
                 total_prelabeled = len(indices)
@@ -612,7 +625,13 @@ class DataLoader:
                     route = indices[start_idx:]
                     print(f"   Route 'prelabel_last_third': {len(route):,} images ({start_idx:,} - {total_prelabeled:,} of {total_prelabeled:,} prelabeled)")
                     return route
-            
+
+                elif strategy in PRELABEL_SIXTH_STRATEGIES:
+                    part = PRELABEL_SIXTH_STRATEGIES[strategy]
+                    route, start_idx, end_idx = _slice_part(indices, part, 6)
+                    print(f"   Route '{strategy}': {len(route):,} images ({start_idx:,} - {end_idx:,} of {total_prelabeled:,} prelabeled)")
+                    return route
+
             # If NOT filtered, need to find prelabels manually
             from config.config import LABELS_DIR
             import json
@@ -691,7 +710,13 @@ class DataLoader:
                     route = prelabeled_indices[start_idx:]
                     print(f"   Route 'prelabel_last_third': {len(route):,} images ({start_idx:,} - {total_prelabeled:,} of {total_prelabeled:,} prelabeled)")
                     return route
-                
+
+                elif strategy in PRELABEL_SIXTH_STRATEGIES:
+                    part = PRELABEL_SIXTH_STRATEGIES[strategy]
+                    route, start_idx, end_idx = _slice_part(prelabeled_indices, part, 6)
+                    print(f"   Route '{strategy}': {len(route):,} images ({start_idx:,} - {end_idx:,} of {total_prelabeled:,} prelabeled)")
+                    return route
+
             except Exception as e:
                 print(f"   Warning: Could not load AI prelabels for routing: {e}")
                 import traceback

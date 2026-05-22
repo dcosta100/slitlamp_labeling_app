@@ -16,19 +16,19 @@
       "password": "7982933fbe2382a834c46da403de99f9c8e08e8f2e7afa50c6bf42f4b63f1c2b",
       "role": "labeler",
       "created_at": "2026-02-25T11:05:45.105762",
-      "route_strategy": "prelabel_first_third"
+      "route_strategy": "prelabel_1_6"
     },
     "palio": {
       "password": "1897d560cb26a6aae6857c225ed87149b6e11995404ae17a74435728bffccca4",
       "role": "labeler",
       "created_at": "2026-02-25T14:34:43.698561",
-      "route_strategy": "prelabel_first"
+      "route_strategy": "prelabel_2_6"
     },
     "taka": {
       "password": "e07a071789c69cd61505bf469af9096580df0eafe5469be923c4a924404e92a4",
       "role": "labeler",
       "created_at": "2026-02-28T11:13:31.353397",
-      "route_strategy": "prelabel_second_third"
+      "route_strategy": "prelabel_3_6"
     },
     "theo": {
       "password": "4fcecc35d6fa20440109cc00f1dd93336c4d1ddd23bbaa0983ce10908c1af050",

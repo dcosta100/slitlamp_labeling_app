@@ -43,16 +43,17 @@ class LabelManager:
         """Get saved position in route"""
         return self.labels.get("current_position", 0)
     
-    def add_label(self, image_index, image_path, laterality, quality, 
-                  conditions=None, metadata=None):
+    def add_label(self, image_index, image_path, laterality, quality,
+                  conditions=None, metadata=None, illumination=None):
         """
         Add or update a label with multilabel hierarchical structure
-        
+
         Parameters:
         - image_index: Index of the image
         - image_path: Path to the image file
         - laterality: Left or Right
         - quality: Usable or Non Usable
+        - illumination: Optional slit lamp illumination technique (or None if not specified)
         - conditions: Dictionary with condition names as keys and their data as values
           Example: {
               "Dry Eye Disease": {"severity": "Moderate", "signs": ["MGD", "Foamy tear film"]},
@@ -69,6 +70,7 @@ class LabelManager:
             "image_path": image_path,
             "laterality": laterality,
             "quality": quality,
+            "illumination": illumination,
             "conditions": conditions or {},
             "labeled_by": self.username,
             "labeled_at": datetime.now().strftime(DATETIME_FORMAT),
