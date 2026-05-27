@@ -10,7 +10,7 @@
       "password": "bdac857dfb500a0791bd7cd72a8ad260b9a3db09ce8f9de1285f2dbd3412e874",
       "role": "labeler",
       "created_at": "2026-02-25T11:05:38.092414",
-      "route_strategy": "prelabel_second_third"
+      "route_strategy": "prelabel_6_6"
     },
     "song": {
       "password": "7982933fbe2382a834c46da403de99f9c8e08e8f2e7afa50c6bf42f4b63f1c2b",
@@ -34,7 +34,13 @@
       "password": "4fcecc35d6fa20440109cc00f1dd93336c4d1ddd23bbaa0983ce10908c1af050",
       "role": "labeler",
       "created_at": "2026-03-16T11:00:24.945220",
-      "route_strategy": "prelabel_second_third"
+      "route_strategy": "prelabel_4_6"
+    },
+    "karin": {
+      "password": "f683a753279d11a4a4f9acc4472e0acc7d3e7075ee60bcbbbc1c0ad12519e0f6",
+      "role": "labeler",
+      "created_at": "2026-05-27T09:35:12.812393",
+      "route_strategy": "prelabel_5_6"
     }
   }
 }
