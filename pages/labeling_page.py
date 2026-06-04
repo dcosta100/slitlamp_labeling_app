@@ -239,13 +239,27 @@ def show():
     ai_label_manager = st.session_state.ai_label_manager
     
     # Route
-    if 'route_indices' not in st.session_state:
+    # Always read the current strategy from users.json so that admin reassignments
+    # take effect on the next rerun without requiring the labeler to restart Streamlit.
+    current_strategy = get_user_route_strategy(st.session_state.username)
+    strategy_changed = (
+        'route_strategy' in st.session_state
+        and st.session_state.route_strategy != current_strategy
+    )
+    needs_route_init = (
+        'route_indices' not in st.session_state
+        or st.session_state.get('route_strategy') != current_strategy
+    )
+
+    if needs_route_init:
         total_images = data_loader.get_total_images()
-        route_strategy = get_user_route_strategy(st.session_state.username)
-        st.session_state.route_indices = data_loader.create_route(total_images, route_strategy, st.session_state.username)
-        
-        # Load saved position OR find first unlabeled
-        saved_position = label_manager.get_position()
+        st.session_state.route_strategy = current_strategy
+        st.session_state.route_indices = data_loader.create_route(total_images, current_strategy, st.session_state.username)
+
+        # When the strategy changes, the saved position refers to the OLD route
+        # and is meaningless on the new one. Start from 0 and let the
+        # first-unlabeled search land the labeler at the right place.
+        saved_position = 0 if strategy_changed else label_manager.get_position()
         
         # Find first unlabeled image from saved position onwards
         route_indices_temp = st.session_state.route_indices
@@ -264,8 +278,16 @@ def show():
                     break
         
         st.session_state.current_position = first_unlabeled
-        
-        if first_unlabeled != saved_position:
+
+        # Persist the recomputed position so the file matches reality
+        # (important after a strategy change, where the old saved position
+        # belonged to a different route).
+        if strategy_changed or first_unlabeled != saved_position:
+            label_manager.save_position(first_unlabeled)
+
+        if strategy_changed:
+            st.info(f"ℹ️ Route updated to '{current_strategy}'. Resuming at position {first_unlabeled + 1}/{len(st.session_state.route_indices)}")
+        elif first_unlabeled != saved_position:
             st.info(f"ℹ️ Skipped to first unlabeled image at position {first_unlabeled + 1}/{len(st.session_state.route_indices)}")
         elif saved_position > 0:
             st.info(f"ℹ️ Resuming from position {saved_position + 1}/{len(st.session_state.route_indices)}")
