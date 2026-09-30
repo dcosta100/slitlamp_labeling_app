@@ -8,13 +8,19 @@ cd /d "%~dp0" || (
     exit /b
 )
 
-REM Activate venv
-if not exist .venv\Scripts\activate (
-    echo Virtual environment not found.
+REM Activate the virtual environment. Accept either name: this repo has
+REM historically used "venv", while these scripts used to look only for
+REM ".venv" and would exit before ever starting Streamlit.
+if exist ".venv\Scripts\activate.bat" (
+    call ".venv\Scripts\activate.bat"
+) else if exist "venv\Scripts\activate.bat" (
+    call "venv\Scripts\activate.bat"
+) else (
+    echo Virtual environment not found ^(looked for .venv and venv^).
+    echo Create one with:  python -m venv venv
     pause
     exit /b
 )
-call .venv\Scripts\activate
 
 REM Start Streamlit in background
 start "" cmd /c "streamlit run app.py --server.port 8501"

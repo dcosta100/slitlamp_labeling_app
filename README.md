@@ -1,286 +1,243 @@
 # 🔬 Slitlamp Image Labeling Application
 
-A professional Streamlit-based application for labeling slitlamp medical images with comprehensive clinical context and multi-user support.
+Streamlit application for labeling slit lamp photographs with clinical context
+(EHR notes, structured exam annotations, order diagnosis) alongside each image.
+Multi-user, with per-user routes so labelers do not collide, and an admin
+dashboard for weekly progress reporting.
 
 ## 📋 Features
 
-### Core Functionality
-- **Image Labeling Interface**: Intuitive interface for labeling medical images with laterality, diagnosis, quality assessment, and flags
-- **Clinical Context**: Automatically displays relevant clinical notes and exam information alongside images
-- **Smart Note Matching**: Finds and displays clinical notes closest to exam date (before, after, or both)
-- **Multi-User Support**: Individual login system with personalized labeling progress
-- **Route Strategies**: Different labeling sequences per user to maximize coverage
-- **Progress Tracking**: Real-time progress bars and statistics
-- **Label History**: Complete audit trail with timestamps and edit history
-- **Review Queue**: Mark images for later review
-
-### User Roles
-
-#### Labeler
-- Label images with full clinical context
-- Track personal progress
-- Navigate images (first, previous, next, last, skip, go-to)
-- Mark images for review
-- Edit previous labels
-
-#### Admin
-- All labeler features
-- User management (create users, assign route strategies)
-- Dashboard with comprehensive statistics
-- View all users' progress
-- Review all labels with filtering
-- Export labels to CSV
+- **Labeling interface** with laterality, image quality, optional illumination
+  technique, and a hierarchical **multilabel** diagnosis (an image can carry
+  several conditions at once)
+- **Clinical context**: closest EHR progress notes and slit lamp exam
+  annotations for the same patient, matched by date
+- **AI pre-labels**: suggestions loaded from a previous model run, shown for
+  review rather than accepted blindly
+- **Route strategies** so each labeler works a disjoint slice of the dataset
+- **Session activity logging**: login, working time and labels per session
+- **Admin dashboard**: weekly report, session history, import of labeler files,
+  cumulative statistics, user management, label review and CSV export
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.8 or higher
-- Windows OS (paths configured for Windows, but can be adapted)
-- Access to the required data files (.dta, .parquet, .csv)
+
+- Python 3.8+
+- Windows (paths assume Windows and a mounted image share)
+- Access to the source data files and to the image share
 
 ### Installation
 
-1. **Clone the repository**
 ```bash
 git clone <your-repo-url>
 cd slitlamp_labeling_app
-```
-
-2. **Create virtual environment**
-```bash
-python -m venv venv
-```
-
-3. **Activate virtual environment**
-```bash
-# Windows
-venv\Scripts\activate
-
-# Linux/Mac
-source venv/bin/activate
-```
-
-4. **Install dependencies**
-```bash
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-5. **Configure paths**
+### Configuration
 
-Edit `config/config.py` and update the following paths with your actual data locations:
-
-```python
-DIAGNOSIS_PATH = r"C:\Users\YourUser\...\studyinfo_laterality_diagnosis.dta"
-NOTES_PATH = r"C:\Users\YourUser\...\ba746f39a1773233.parquet"
-CROSS_PATH = r"C:\Users\YourUser\...\slitlamp_crosswalk_complete_12082025.csv"
-IMAGE_BASE_PATH = r"L:\SlitLamp"
-```
-
-### Running the Application
+All machine-specific paths come from a `.env` file in the project root. Copy the
+template and fill it in — **the application will refuse to start if any required
+path is missing**:
 
 ```bash
-streamlit run app.py
+copy .env.example .env
 ```
 
-The application will open in your default web browser at `http://localhost:8501`
+```ini
+DIAGNOSIS_PATH=...\studyinfo_laterality_diagnosis.dta
+NOTES_PATH=...\ehr_anonymized_all.parquet
+CROSS_PATH=...\slitlamp_crosswalk_complete_12082025.csv
+ANNOTATIONS_PATH=...\BPGR_slexam_all.csv
+IMAGE_BASE_PATH=L:\SlitLamp
+PREPROCESSED_PATH=...\data\preprocessed_dataset.parquet
+USE_PREPROCESSED=True
+```
 
-### Default Login
+Do **not** edit `config/config.py` for paths. It only reads them from `.env`.
 
-**Admin Account:**
-- Username: `admin`
-- Password: `admin123`
+Optional settings, all with sensible defaults:
 
-⚠️ **Important:** Change the default admin password after first login!
+| Variable | Default | Meaning |
+|---|---|---|
+| `DEFAULT_DATASET_FILTER` | `WITH_AI_PRELABEL` | Which images enter the routes |
+| `MAX_NOTE_DAYS_DIFFERENCE` | 365 | Window for matching EHR notes |
+| `MAX_ANNOTATION_DAYS_DIFFERENCE` | 7 | Window for matching annotations |
+| `ENABLE_AUTOFILL_SAME_STUDYID` | True | Prefill from another image of the same study |
+| `HEARTBEAT_INTERVAL_SECONDS` | 60 | How often an open session logs a heartbeat |
+| `SESSION_IDLE_TIMEOUT_MINUTES` | 15 | Gap above which a labeler counts as away |
+
+### Preprocessing (once)
+
+Joining the source files on demand is far too slow for ~215k images. Build the
+preprocessed parquet first — see [preprocessing/README.md](preprocessing/README.md):
+
+```bash
+python preprocessing/create_preprocessed_dataset.py
+```
+
+### Running
+
+```bash
+run_streamlit.bat          # or: streamlit run app.py
+```
+
+Opens at `http://localhost:8501`.
+
+### Updating
+
+```bash
+update_repo.bat
+```
+
+Stops Streamlit, force-syncs tracked files to `origin`, clears bytecode caches
+and reinstalls requirements. It deliberately does **not** run `git clean`, so
+locally saved labels and logs survive.
+
+### Default login
+
+`admin` / `admin123` — change this before giving anyone else access.
 
 ## 📁 Project Structure
 
 ```
 slitlamp_labeling_app/
-├── app.py                      # Main application entry point
-├── requirements.txt            # Python dependencies
-├── README.md                   # This file
-├── .gitignore                 # Git ignore rules
-│
-├── config/                    # Configuration
-│   ├── __init__.py
-│   └── config.py              # Application settings and paths
-│
-├── utils/                     # Utility modules
-│   ├── __init__.py
-│   ├── auth.py                # Authentication and user management
-│   ├── data_loader.py         # Data loading and merging
-│   └── label_manager.py       # Label saving and statistics
-│
-├── pages/                     # Application pages
-│   ├── __init__.py
-│   ├── login_page.py          # Login interface
-│   ├── labeling_page.py       # Main labeling interface
-│   └── admin_page.py          # Admin dashboard
-│
-└── data/                      # Data directory (created automatically)
-    ├── labels/                # User label files (JSON)
-    └── users/                 # User configuration
+├── app.py                    # entry point: login gate, sidebar, routing
+├── config/config.py          # .env loading + the whole label taxonomy
+├── utils/
+│   ├── auth.py               # users.json, password hashing, session state
+│   ├── data_loader.py        # dataset loading, filtering, route building
+│   ├── label_manager.py      # label storage, migration, statistics
+│   ├── session_logger.py     # per-session activity log
+│   └── reporting.py          # weekly aggregation for the admin dashboard
+├── pages/
+│   ├── login_page.py
+│   ├── labeling_page.py
+│   └── admin_page.py
+├── preprocessing/            # one-off dataset build
+└── data/
+    ├── labels/               # {username}_labels.json  (gitignored)
+    ├── logs/                 # {username}_sessions.jsonl (gitignored)
+    ├── users/users.json
+    └── backups/              # pre-migration and pre-import copies
 ```
 
-## 🎯 Usage Guide
+## 🏷️ Label Schema
 
-### For Labelers
+Labels are keyed by a **normalised image path** — everything from `SlitLamp\`
+onwards, lowercased. A route position would not survive a change of dataset
+filter or parquet; the image path does. Files written before this change are
+migrated automatically on first load, with the original copied to
+`data/backups/`.
 
-1. **Login** with your credentials
-2. **Navigate** through images using the control buttons
-3. **Review** clinical information displayed on the right panel
-4. **Label** each image with:
-   - Laterality (Left/Right)
-   - Diagnosis (predefined options + Other)
-   - Flag (Yes/No) - for problematic images
-   - Quality Assessment (Usable/Not Usable)
-5. **Save** your label (automatically advances to next unlabeled image)
-6. **Mark for Review** if you want to revisit later
-
-### Navigation Options
-- **⏮️ First**: Go to first image in your sequence
-- **◀️ Previous**: Go to previous image
-- **Go to position**: Jump to specific position
-- **▶️ Next**: Go to next image
-- **⏭️ Next Unlabeled**: Skip to next unlabeled image
-- **⏭️ Skip**: Skip current image without labeling
-
-### For Admins
-
-1. **Login** with admin credentials
-2. **Navigate** to Admin Dashboard from sidebar
-3. **View Statistics**: 
-   - Overall progress across all users
-   - Per-user statistics and visualizations
-   - Diagnosis and laterality distributions
-4. **Manage Users**:
-   - Create new labeler accounts
-   - Assign route strategies
-   - View all users and their roles
-5. **Review Labels**:
-   - View review queues for each user
-   - Filter and search labels
-   - Export labels to CSV
-
-## 🛠️ Route Strategies
-
-Different users are assigned different labeling sequences to maximize coverage:
-
-- **Forward**: Start from image 1 → N
-- **Backward**: Start from image N → 1
-- **Middle Out**: Start from middle, alternate outward
-- **Random**: Random sequence (seeded by username for reproducibility)
-
-## 💾 Data Storage
-
-### Label Files
-Labels are stored as JSON files in `data/labels/` directory:
-- One file per user: `{username}_labels.json`
-- Contains all labels with full metadata
-- Includes edit history and timestamps
-- Review queue tracking
-
-### User Configuration
-User data stored in `data/users/users.json`:
-- Hashed passwords (SHA-256)
-- User roles
-- Route strategies
-- Account creation dates
-
-## 🔒 Security Notes
-
-- Passwords are hashed using SHA-256
-- User sessions managed by Streamlit
-- Local authentication only (no external auth)
-- Change default admin password immediately
-- Keep user data files secure
-
-## 📊 Label Data Format
-
-Each label contains:
 ```json
 {
-  "image_path": "path/to/image.jpg",
-  "laterality": "Left",
-  "diagnosis": "Ulcer",
-  "diagnosis_other": null,
-  "flag": "No",
-  "quality": "Usable",
-  "labeled_by": "username",
-  "labeled_at": "2025-12-08 14:30:00",
-  "is_edit": false,
-  "metadata": {
-    "maskedid_studyid": "123456",
-    "exam_date": "2024-01-15",
-    "pat_mrn": "MRN123"
+  "user": "taka",
+  "schema_version": 2,
+  "labels": {
+    "slitlamp\\bpg000168\\bpg000168_125606678\\slit lamp photography - os - left eye\\bpg000168_125606678_001.png": {
+      "image_path": "L:\\SlitLamp\\BPG000168\\...\\BPG000168_125606678_001.png",
+      "image_index": 10541,
+      "laterality": "Left",
+      "quality": "Usable",
+      "illumination": "Diffuse",
+      "conditions": {
+        "Dry Eye Disease": {"severity": "Moderate", "signs": ["MGD"]},
+        "Cataract": {"type": "Pseudophakia", "severity": null, "features": []}
+      },
+      "labeled_by": "taka",
+      "labeled_at": "2026-03-01 11:11:44",
+      "is_edit": false,
+      "metadata": {"maskedid_studyid": "...", "exam_date": "...", "pat_mrn": "..."},
+      "edit_history": []
+    }
   },
-  "edit_history": []
+  "review_queue": [],
+  "current_position": 3002
 }
 ```
 
+Conditions and their sub-fields are defined in `config/config.py`:
+Dry Eye Disease, Cataract, Infectious Keratitis / Conjunctivitis, Ocular Surface
+Tumors, Subconjunctival Hemorrhage. Change the taxonomy there, not in the pages.
+
+**Saves are crash-safe.** Each save is written to a temporary file, flushed, then
+swapped in atomically, and the previous version is kept as `.bak`. If the main
+file is ever unreadable, the `.bak` is loaded automatically.
+
+## 🛠️ Route Strategies
+
+Each user has a `route_strategy` in `data/users/users.json` that decides which
+images they see and in what order. Admins can reassign it from the dashboard;
+the change takes effect on the labeler's next interaction, with no restart.
+
+| Strategy | Meaning |
+|---|---|
+| `prelabel_first` | AI pre-labeled images first, then the rest |
+| `prelabel_first_third` … `prelabel_last_third` | Thirds of the pre-labeled set |
+| `prelabel_1_6` … `prelabel_6_6` | Sixths of the pre-labeled set |
+| `forward` / `backward` | Whole dataset, in order or reversed |
+| `middle_out` | From the middle, alternating outwards |
+| `random` | Shuffled, seeded by username |
+
+Changing a user's strategy discards their saved position (it belonged to the old
+route) and drops them at the first unlabeled image of the new one. Their labels
+are unaffected — they are keyed by image, not by position.
+
+## 💾 Data Storage
+
+| What | Where | In git? |
+|---|---|---|
+| Labels | `data/labels/{username}_labels.json` | No |
+| Crash backup | `data/labels/{username}_labels.json.bak` | No |
+| Session activity | `data/logs/{username}_sessions.jsonl` | No |
+| Pre-migration / pre-import copies | `data/backups/` | No |
+| AI pre-labels | `data/labels/AI_prelabel_labels.json` | Yes |
+| Users | `data/users/users.json` | Yes |
+
+## 📅 Weekly Workflow
+
+**Labelers** send two files at the end of each week:
+
+- `data/labels/{username}_labels.json`
+- `data/logs/{username}_sessions.jsonl`
+
+**Admin** loads them on the dashboard's **Import** tab. The existing copies are
+backed up first, session logs are merged rather than replaced, and a warning is
+shown if an incoming file has fewer labels than the stored one (usually a sign
+that an older file was sent by mistake).
+
+Then open **Weekly Report**, pick the week, and use the generated markdown or CSV
+for the status update.
+
+## 🔒 Security Notes
+
+- Passwords are SHA-256 hashed, **unsalted**, and `users.json` is tracked in git
+- There is no password-change screen; passwords are set when the user is created
+- Authentication is local only, intended for a trusted network
+
 ## 🐛 Troubleshooting
 
-### Images Not Loading
-- Verify `IMAGE_BASE_PATH` in `config/config.py`
-- Check image file permissions
-- Ensure image paths in crosswalk CSV are correct
+**Application will not start, complains about a path** — a required variable is
+missing from `.env`. Compare against `.env.example`.
 
-### Data Loading Errors
-- Verify all three data file paths in config
-- Check file permissions
-- Ensure pandas can read .dta (Stata) files
+**Images not loading** — check `IMAGE_BASE_PATH` and that the share is mounted.
+The path is built as
+`IMAGE_BASE_PATH/maskedid/maskedid_studyid/proc_name/photo_name`.
 
-### Login Issues
-- Check `data/users/users.json` exists
-- Verify default admin credentials
-- Delete users.json to reset (will lose all users!)
+**Very slow startup** — the preprocessed parquet is missing, so the app is
+joining the source files at runtime. Run the preprocessing script.
 
-## 📝 Development
+**Labeler starts from the beginning again** — their saved position was reset,
+usually by a route strategy change. The app scans forward to the first unlabeled
+image, so no work is repeated.
 
-### Adding New Features
-
-1. Create feature in appropriate module (`utils/` or `pages/`)
-2. Update `config/config.py` if new settings needed
-3. Test thoroughly with multiple users
-4. Update this README
-
-### Testing
-
-```bash
-# Create test user
-# Login as admin → User Management → Create User
-
-# Test different route strategies
-# Create users with different strategies and compare sequences
-```
-
-## 🤝 Contributing
-
-1. Create a feature branch
-2. Make your changes
-3. Test thoroughly
-4. Submit pull request with description
-
-## 📄 License
-
-[Add your license here]
-
-## 👥 Authors
-
-[Add your name/team here]
-
-## 🙏 Acknowledgments
-
-Built for medical image labeling workflows with clinical context integration.
-
-## 📞 Support
-
-For issues or questions:
-1. Check this README
-2. Review code comments
-3. Contact the development team
+**A label file will not open** — the app falls back to the `.bak` automatically
+and prints a warning to the console. Older copies live in `data/backups/`.
 
 ---
 
-**Version:** 1.0.0  
-**Last Updated:** December 2025
+**Last Updated:** August 2026

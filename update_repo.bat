@@ -8,6 +8,18 @@ echo   (Keeps gitignored local labels)
 echo ==========================================
 echo.
 
+REM --- 0) Stop any running Streamlit BEFORE updating files.
+REM     If Streamlit keeps running during the update, Python holds the OLD
+REM     .py files in memory and the labeler will not see the new code.
+REM     We only kill python.exe processes whose command line contains
+REM     "streamlit" (surgical, won't touch unrelated Python apps).
+echo Checking for running Streamlit processes...
+powershell -NoProfile -Command ^
+  "$p = Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.CommandLine -like '*streamlit*' };" ^
+  "if ($p) { $p | ForEach-Object { Write-Host ('  Stopping Streamlit PID ' + $_.ProcessId); Stop-Process -Id $_.ProcessId -Force } }" ^
+  "else { Write-Host '  No running Streamlit detected.' }"
+echo.
+
 REM --- 1) Check if this is a git repo
 git rev-parse --is-inside-work-tree >nul 2>&1
 if errorlevel 1 (
@@ -23,7 +35,7 @@ if errorlevel 1 (
   goto :FAIL
 )
 
-REM --- 3) Detect current branch
+REM --- 3) Detect current branch + record HEAD before the update
 for /f "delims=" %%B in ('git rev-parse --abbrev-ref HEAD') do set "BRANCH=%%B"
 if "%BRANCH%"=="" (
   echo [ERROR] Could not detect current branch.
@@ -34,8 +46,9 @@ if /i "%BRANCH%"=="HEAD" (
   echo         Ask Douglas to checkout a branch (e.g., main).
   goto :FAIL
 )
-
-echo Current branch: %BRANCH%
+for /f "delims=" %%C in ('git rev-parse --short HEAD') do set "OLD_HEAD=%%C"
+echo Branch: %BRANCH%
+echo HEAD (before): %OLD_HEAD%
 echo.
 
 REM --- 4) Fetch updates
@@ -65,15 +78,27 @@ if errorlevel 1 (
   goto :FAIL
 )
 
+for /f "delims=" %%C in ('git rev-parse --short HEAD') do set "NEW_HEAD=%%C"
+echo HEAD (after):  %NEW_HEAD%
+if "%OLD_HEAD%"=="%NEW_HEAD%" (
+  echo   Already up to date - no commits pulled.
+) else (
+  echo   Updated %OLD_HEAD% -^> %NEW_HEAD%
+)
+
 REM --- NOTE:
 REM We intentionally do NOT run `git clean -fd` here because it can delete
 REM untracked AND ignored files (your locally saved labels).
-REM If you ever want to clean ONLY non-ignored untracked files safely, you can use:
-REM   git clean -fd
-REM BUT only if your labels are in a gitignored folder AND you add an exclusion, e.g.:
-REM   git clean -fd -e labels/ -e .venv/
 
-REM --- 7) Optional: submodules (safe even if none)
+REM --- 7) Clear Python bytecode caches so stale .pyc files cannot shadow
+REM     the new .py files (defends against clock skew / OneDrive sync quirks).
+echo.
+echo Clearing __pycache__ directories...
+for /d /r %%D in (__pycache__) do (
+  if exist "%%D" rmdir /s /q "%%D" 2>nul
+)
+
+REM --- 8) Optional: submodules (safe even if none)
 echo.
 echo Updating submodules (if any)...
 git submodule update --init --recursive
@@ -82,14 +107,15 @@ if errorlevel 1 (
   goto :FAIL
 )
 
+REM --- 9) Python environment + requirements
 echo.
-echo Git update OK.
-echo.
+SET "VENV_DIR="
+IF EXIST ".venv\Scripts\activate.bat" SET "VENV_DIR=.venv"
+IF NOT DEFINED VENV_DIR IF EXIST "venv\Scripts\activate.bat" SET "VENV_DIR=venv"
 
-REM --- 8) Python environment + requirements
-IF EXIST ".venv\Scripts\activate.bat" (
-  echo Activating virtual environment...
-  call ".venv\Scripts\activate.bat"
+IF DEFINED VENV_DIR (
+  echo Activating virtual environment ^(!VENV_DIR!^)...
+  call "!VENV_DIR!\Scripts\activate.bat"
 
   IF EXIST "requirements.txt" (
     echo.
@@ -109,12 +135,16 @@ IF EXIST ".venv\Scripts\activate.bat" (
     echo [WARN] requirements.txt not found. Skipping pip install.
   )
 ) ELSE (
-  echo [WARN] .venv not found. Skipping environment activation.
+  echo [WARN] No virtual environment found ^(looked for .venv and venv^).
+  echo        Skipping package update. Create one with: python -m venv venv
 )
 
 echo.
 echo ==========================================
-echo   DONE - Repository is up to date
+echo   DONE - Repository is at %NEW_HEAD%
+echo.
+echo   NEXT STEP: run run_streamlit.bat to start the app
+echo   (Streamlit was stopped above so it picks up the new code).
 echo ==========================================
 pause
 exit /b 0

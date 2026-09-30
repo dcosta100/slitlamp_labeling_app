@@ -14,3 +14,10 @@ maxUploadSize = 200
 
 [browser]
 gatherUsageStats = false
+
+[client]
+# pages/ holds modules that app.py imports, not standalone Streamlit pages.
+# Without this, Streamlit auto-detects the folder and lists login_page,
+# labeling_page and admin_page in the sidebar, which is confusing for labelers
+# and lets anyone click straight into the admin module.
+showSidebarNavigation = false
