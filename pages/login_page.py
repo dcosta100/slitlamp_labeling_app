@@ -4,13 +4,15 @@ Login page
 
 import streamlit as st
 from utils.auth import authenticate_user
+from utils.label_manager import LabelManager
+from utils.session_logger import start_session
 
 def show():
     """Show login page"""
-    
-    # Hide sidebar
-    st.set_page_config(page_title="Login", layout="wide", initial_sidebar_state="collapsed")
-    # OU se já tem set_page_config, adicione:
+
+    # Hide the sidebar. app.py already called st.set_page_config(), which may
+    # only be called once per page, so the layout is set there and only the CSS
+    # belongs here.
     st.markdown("""
         <style>
         [data-testid="stSidebar"] {
@@ -18,8 +20,7 @@ def show():
         }
         </style>
     """, unsafe_allow_html=True)
-    """Show login page"""
-    
+
     # Center the login form
     col1, col2, col3 = st.columns([1, 2, 1])
     
@@ -44,6 +45,17 @@ def show():
                         st.session_state.logged_in = True
                         st.session_state.username = username
                         st.session_state.role = role
+
+                        # Start the activity log for this session. The label
+                        # count at login is the baseline used to work out how
+                        # many labels the session actually produced.
+                        st.session_state.labels_saved = 0
+                        try:
+                            labels_at_start = LabelManager(username).get_labeled_count()
+                        except Exception:
+                            labels_at_start = 0
+                        start_session(st.session_state, username, labels_at_start)
+
                         st.success(message)
                         st.rerun()
                     else:

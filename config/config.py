@@ -78,13 +78,29 @@ DATA_DIR = BASE_DIR / "data"
 CONFIG_DIR = BASE_DIR / "config"
 LABELS_DIR = DATA_DIR / "labels"
 USERS_DIR = DATA_DIR / "users"
+LOGS_DIR = DATA_DIR / "logs"
+BACKUPS_DIR = DATA_DIR / "backups"
 
 # Create directories if they don't exist
 LABELS_DIR.mkdir(parents=True, exist_ok=True)
 USERS_DIR.mkdir(parents=True, exist_ok=True)
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
 
 # User configuration file
 USERS_CONFIG_FILE = USERS_DIR / "users.json"
+
+# ======================================================
+# Session activity logging
+# ======================================================
+
+# How often a still-open session writes a heartbeat to its log. Every save is
+# always logged regardless of this interval.
+HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 60))
+
+# Gap between two events above which the labeler is assumed to have walked
+# away: used to separate "session wall-clock" from "time actually working".
+SESSION_IDLE_TIMEOUT_MINUTES = int(os.getenv("SESSION_IDLE_TIMEOUT_MINUTES", 15))
 
 # ======================================================
 # Labeling options - MULTILABEL HIERARCHICAL STRUCTURE

@@ -38,9 +38,13 @@ class DataLoader:
         self._notes_loaded = False
         self._annotations_loaded = False
         
-    @st.cache_data
     def load_data(_self):
-        """Load all datasets with caching"""
+        """Load all datasets.
+
+        Not cached: the method both mutates the instance and returns a status
+        tuple, so a cache would hand back the tuple on later calls without ever
+        setting the attributes the rest of the class depends on.
+        """
         try:
             # Load diagnosis data (Stata file)
             _self.diagnosis_df = pd.read_stata(DIAGNOSIS_PATH)
@@ -278,96 +282,37 @@ class DataLoader:
     
     def _apply_ai_prelabel_filter(self, df):
         """Filter to only images with AI pre-labels"""
-        from config.config import LABELS_DIR
         import json
-        
+        from config.config import LABELS_DIR
+        from utils.label_manager import normalize_image_path
+
         ai_labels_file = LABELS_DIR / "AI_prelabel_labels.json"
-        
-        print(f"   [DEBUG] Looking for AI prelabels at: {ai_labels_file}")
-        print(f"   [DEBUG] File exists: {ai_labels_file.exists()}")
-        
         if not ai_labels_file.exists():
             print("   ⚠️  Warning: AI_prelabel_labels.json not found")
-            return df.head(0)  # Return empty dataframe
-        
-        # Load AI prelabels
+            return df.head(0)
+
         try:
             with open(ai_labels_file, 'r', encoding='utf-8') as f:
                 ai_data = json.load(f)
-            
-            ai_labels = ai_data.get('labels', {})
-            ai_image_paths = set(ai_labels.keys())
-            
-            print(f"   [DEBUG] AI prelabels loaded: {len(ai_image_paths):,} unique image paths")
-            
-            # Check first few paths
-            print(f"   [DEBUG] Sample AI paths (first 3):")
-            for i, path in enumerate(list(ai_image_paths)[:3]):
-                print(f"      {i+1}. {path}")
-            
-            # Build image_path for merged_df if it doesn't exist
-            if 'image_path' not in df.columns:
-                print(f"   [DEBUG] Building image_path column from merged_df...")
-                df['image_path'] = df.apply(lambda row: self.get_image_path(row), axis=1)
-            
-            print(f"   [DEBUG] Sample merged_df paths (first 3):")
-            for i, path in enumerate(df['image_path'].head(3)):
-                print(f"      {i+1}. {path}")
-            
-            # Normalize paths: extract from "SlitLamp\" onwards
-            def normalize_path(path):
-                """Extract path starting from SlitLamp\ onwards"""
-                path_str = str(path)
-                # Find "SlitLamp" in path (case insensitive)
-                import re
-                match = re.search(r'SlitLamp[/\\]', path_str, re.IGNORECASE)
-                if match:
-                    # Extract from SlitLamp onwards
-                    normalized = path_str[match.start():]
-                    # Normalize separators to backslash and lowercase
-                    normalized = normalized.replace('/', '\\').lower()
-                    return normalized
-                return path_str.lower()
-            
-            print(f"   [DEBUG] Normalizing paths (from 'SlitLamp\\' onwards)...")
-            
-            # Normalize AI paths
-            ai_paths_normalized = {normalize_path(p): p for p in ai_image_paths}
-            
-            print(f"   [DEBUG] Sample normalized AI paths (first 3):")
-            for i, (norm_path, orig_path) in enumerate(list(ai_paths_normalized.items())[:3]):
-                print(f"      {i+1}. {norm_path}")
-            
-            # Normalize merged_df paths
-            df['normalized_path'] = df['image_path'].apply(normalize_path)
-            
-            print(f"   [DEBUG] Sample normalized merged_df paths (first 3):")
-            for i, path in enumerate(df['normalized_path'].head(3)):
-                print(f"      {i+1}. {path}")
-            
-            # Check for matches using normalized paths
-            df_paths_normalized = set(df['normalized_path'])
-            matches = set(ai_paths_normalized.keys()) & df_paths_normalized
-            
-            print(f"   [DEBUG] Normalized paths in merged_df: {len(df_paths_normalized):,}")
-            print(f"   [DEBUG] Matches found: {len(matches):,}")
-            
-            if len(matches) == 0:
-                print("   ⚠️  No matches found even after normalization")
-                # Show sample for debugging
-                print(f"   [DEBUG] Sample AI normalized path: {list(ai_paths_normalized.keys())[0] if ai_paths_normalized else 'NONE'}")
-                print(f"   [DEBUG] Sample DF normalized path: {list(df_paths_normalized)[0] if df_paths_normalized else 'NONE'}")
-                df = df.drop('normalized_path', axis=1)
+
+            # The keys are the image paths. The image_path stored *inside* each
+            # record is not usable here: the study expansion copied the first
+            # image's path onto every sibling in the study.
+            ai_paths = {normalize_image_path(p) for p in (ai_data.get('labels') or {})}
+            print(f"   AI pre-labels loaded: {len(ai_paths):,} image paths")
+
+            df = self._add_path_columns(df)
+            matches = ai_paths & set(df['normalized_path'])
+
+            if not matches:
+                print("   ⚠️  No AI pre-label paths matched the dataset")
+                print(f"      sample AI path: {next(iter(ai_paths), 'NONE')}")
+                print(f"      sample dataset path: {df['normalized_path'].iloc[0] if len(df) else 'NONE'}")
                 return df.head(0)
-            
+
             print(f"   ✅ Filtering to {len(matches):,} images with AI pre-labels")
-            
-            # Filter dataframe to only images with AI prelabels
-            df = df[df['normalized_path'].isin(ai_paths_normalized.keys())].copy()
-            df = df.drop('normalized_path', axis=1)
-            
-            return df
-        
+            return df[df['normalized_path'].isin(ai_paths)].copy()
+
         except Exception as e:
             print(f"   ❌ Error loading AI prelabels: {e}")
             import traceback
@@ -502,6 +447,40 @@ class DataLoader:
         """Construct the full image path"""
         path = Path(IMAGE_BASE_PATH) / row['maskedid'] / row['maskedid_studyid'] / row['proc_name'] / row['photo_name']
         return str(path)
+
+    def _add_path_columns(self, df):
+        """Add image_path and its normalised key to a dataframe.
+
+        Vectorised string concatenation rather than a row-wise apply: the
+        dataset is ~215k rows and this runs whenever a route is built.
+        """
+        if 'image_path' not in df.columns:
+            separator = '\\'
+            df['image_path'] = (
+                str(IMAGE_BASE_PATH).rstrip('\\/') + separator
+                + df['maskedid'].astype(str) + separator
+                + df['maskedid_studyid'].astype(str) + separator
+                + df['proc_name'].astype(str) + separator
+                + df['photo_name'].astype(str)
+            )
+
+        if 'normalized_path' not in df.columns:
+            from utils.label_manager import normalize_image_path
+            df['normalized_path'] = df['image_path'].map(normalize_image_path)
+
+        return df
+
+    def ensure_image_paths(self):
+        """Make sure merged_df carries image_path and normalized_path."""
+        if self.merged_df is not None:
+            self.merged_df = self._add_path_columns(self.merged_df)
+
+    def normalized_paths_for(self, indices):
+        """Normalised image keys for a list of positional indices, in order."""
+        self.ensure_image_paths()
+        if self.merged_df is None:
+            return []
+        return self.merged_df['normalized_path'].iloc[list(indices)].tolist()
     
     def get_image_data(self, index):
         """
@@ -647,43 +626,25 @@ class DataLoader:
                 with open(ai_labels_file, 'r', encoding='utf-8') as f:
                     ai_data = json.load(f)
                 
-                ai_labels = ai_data.get('labels', {})
-                ai_image_paths = set(ai_labels.keys())
-                
-                # Build image paths if needed
-                if self.merged_df is not None and 'image_path' not in self.merged_df.columns:
-                    self.merged_df['image_path'] = self.merged_df.apply(
-                        lambda row: self.get_image_path(row), axis=1
-                    )
-                
-                # Normalize paths for comparison
-                import re
-                def normalize_path(path):
-                    path_str = str(path)
-                    match = re.search(r'SlitLamp[/\\]', path_str, re.IGNORECASE)
-                    if match:
-                        normalized = path_str[match.start():]
-                        normalized = normalized.replace('/', '\\').lower()
-                        return normalized
-                    return path_str.lower()
-                
-                ai_paths_normalized = {normalize_path(p) for p in ai_image_paths}
-                
+                from utils.label_manager import normalize_image_path
+
+                ai_paths_normalized = {
+                    normalize_image_path(p) for p in (ai_data.get('labels') or {})
+                }
+
+                self.ensure_image_paths()
+                route_paths = self.normalized_paths_for(indices)
+
                 # Find indices with prelabels
                 prelabeled_indices = []
                 other_indices = []
-                
-                for idx in indices:
-                    if self.merged_df is not None and idx < len(self.merged_df):
-                        image_path = self.merged_df.iloc[idx].get('image_path')
-                        normalized = normalize_path(image_path)
-                        if normalized in ai_paths_normalized:
-                            prelabeled_indices.append(idx)
-                        else:
-                            other_indices.append(idx)
+
+                for idx, normalized in zip(indices, route_paths):
+                    if normalized in ai_paths_normalized:
+                        prelabeled_indices.append(idx)
                     else:
                         other_indices.append(idx)
-                
+
                 total_prelabeled = len(prelabeled_indices)
                 
                 # ── Apply strategy ──────────────────────────────
@@ -755,34 +716,3 @@ class DataLoader:
         
         else:
             return indices
-            success, message = self.merge_datasets()
-            if not success:
-                return 0
-        return len(self.merged_df)
-    
-    def get_route_indices(self, strategy, username, total_images):
-        """
-        Get the sequence of indices based on route strategy
-        """
-        if strategy == "forward":
-            return list(range(total_images))
-        elif strategy == "backward":
-            return list(range(total_images - 1, -1, -1))
-        elif strategy == "middle_out":
-            middle = total_images // 2
-            indices = []
-            for i in range(total_images):
-                if i % 2 == 0:
-                    indices.append(middle + i // 2)
-                else:
-                    indices.append(middle - (i + 1) // 2)
-            return [i for i in indices if 0 <= i < total_images]
-        elif strategy == "random":
-            # Use username as seed for reproducibility
-            seed = sum(ord(c) for c in username)
-            np.random.seed(seed)
-            indices = list(range(total_images))
-            np.random.shuffle(indices)
-            return indices
-        else:
-            return list(range(total_images))

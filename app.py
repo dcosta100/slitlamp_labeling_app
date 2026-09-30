@@ -13,6 +13,7 @@ sys.path.append(str(Path(__file__).parent))
 
 from utils.auth import authenticate_user, initialize_session_state
 from utils.data_loader import DataLoader
+from utils.session_logger import heartbeat, close_session
 from pages import labeling_page, admin_page, login_page
 
 # Page configuration
@@ -57,6 +58,12 @@ st.markdown("""
     .stButton>button {
         width: 100%;
     }
+    /* Belt and braces with client.showSidebarNavigation in .streamlit/config.toml:
+       the auto-generated page list is never wanted here, and config.toml is only
+       read when the server starts. */
+    [data-testid="stSidebarNav"] {
+        display: none;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,6 +77,10 @@ def main():
     if not st.session_state.get('logged_in', False):
         login_page.show()
     else:
+        # Record activity for this session. Throttled internally, and it always
+        # writes when a label was saved, so no save is missed.
+        heartbeat(st.session_state)
+
         # Sidebar navigation
         with st.sidebar:
             st.markdown("### 👤 User Information")
@@ -122,6 +133,9 @@ def main():
             
             # Logout button
             if st.button("🚪 Logout", use_container_width=True):
+                # Close the activity log first: the session state (including
+                # the tracker itself) is wiped on the next line.
+                close_session(st.session_state)
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
                 st.rerun()

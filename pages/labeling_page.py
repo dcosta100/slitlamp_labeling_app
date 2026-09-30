@@ -232,7 +232,9 @@ def show():
     if 'label_manager' not in st.session_state:
         st.session_state.label_manager = LabelManager(st.session_state.username)
     if 'ai_label_manager' not in st.session_state:
-        st.session_state.ai_label_manager = LabelManager("AI_prelabel")
+        # read_only: the AI pre-label file is shared and tracked in git, so it is
+        # never rewritten from here.
+        st.session_state.ai_label_manager = LabelManager("AI_prelabel", read_only=True)
     
     data_loader = st.session_state.data_loader
     label_manager = st.session_state.label_manager
@@ -260,20 +262,24 @@ def show():
         # and is meaningless on the new one. Start from 0 and let the
         # first-unlabeled search land the labeler at the right place.
         saved_position = 0 if strategy_changed else label_manager.get_position()
-        
-        # Find first unlabeled image from saved position onwards
+
+        # Find first unlabeled image from saved position onwards. Membership is
+        # tested against a set of keys rather than one lookup per position, so a
+        # 20k-image route costs one pass instead of 20k dict calls.
         route_indices_temp = st.session_state.route_indices
+        route_paths = data_loader.normalized_paths_for(route_indices_temp)
+        labeled = label_manager.labeled_keys()
         first_unlabeled = saved_position
-        
-        for i in range(saved_position, len(route_indices_temp)):
-            if not label_manager.is_labeled(route_indices_temp[i]):
+
+        for i in range(saved_position, len(route_paths)):
+            if route_paths[i] not in labeled:
                 first_unlabeled = i
                 break
         else:
             # All images from saved_position onwards are labeled
             # Try from beginning
-            for i in range(len(route_indices_temp)):
-                if not label_manager.is_labeled(route_indices_temp[i]):
+            for i in range(len(route_paths)):
+                if route_paths[i] not in labeled:
                     first_unlabeled = i
                     break
         
@@ -305,26 +311,21 @@ def show():
         st.error(f"Error loading image: {message}")
         return
     
-    existing_label = label_manager.get_label(current_index)
+    existing_label = label_manager.get_label(image_data['image_path'])
     ai_suggestion = None
     same_study_label = None
-    
+
     # Check for AI suggestion
     if not existing_label:
-        ai_suggestion = ai_label_manager.get_label_by_path(image_data['image_path'])
-    
+        ai_suggestion = ai_label_manager.get_label(image_data['image_path'])
+
     # Check for same studyid label (from current user - higher priority than AI)
     if not existing_label:
         from config.config import ENABLE_AUTOFILL_SAME_STUDYID
         if ENABLE_AUTOFILL_SAME_STUDYID:
-            current_studyid = image_data.get('maskedid_studyid')
-            if current_studyid:
-                # Find last labeled image with same studyid
-                for idx in reversed(route_indices[:current_position]):
-                    prev_label = label_manager.get_label(idx)
-                    if prev_label and prev_label.get('metadata', {}).get('maskedid_studyid') == current_studyid:
-                        same_study_label = prev_label
-                        break
+            same_study_label = label_manager.get_last_label_for_studyid(
+                image_data.get('maskedid_studyid')
+            )
     
     # Priority: same_study_label > ai_suggestion > None
     source_label = existing_label or same_study_label or ai_suggestion
@@ -441,8 +442,8 @@ def show():
             if st.button("💾 Save Label", use_container_width=True, type="primary", key="save_top"):
                 conditions_data = _collect_conditions_data()
                 label_manager.add_label(
-                    image_index=current_index,
                     image_path=image_data['image_path'],
+                    image_index=current_index,
                     laterality=st.session_state.label_laterality,
                     quality=st.session_state.label_quality,
                     illumination=_collect_illumination(),
@@ -624,8 +625,8 @@ def show():
             if st.button("💾 Save Label", use_container_width=True, type="primary"):
                 conditions_data = _collect_conditions_data()
                 label_manager.add_label(
-                    image_index=current_index,
                     image_path=image_data['image_path'],
+                    image_index=current_index,
                     laterality=st.session_state.label_laterality,
                     quality=st.session_state.label_quality,
                     illumination=_collect_illumination(),
