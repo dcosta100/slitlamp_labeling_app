@@ -41,6 +41,12 @@
       "role": "labeler",
       "created_at": "2026-05-27T09:35:12.812393",
       "route_strategy": "prelabel_5_6"
+    },
+    "jordan": {
+      "password": "b7bacfdd6ae95ed150ec2a3296ae80252345c2c9079dd064060e0a13d0a93df4",
+      "role": "labeler",
+      "created_at": "2026-09-30T11:30:40.476243",
+      "route_strategy": "cataract_focus"
     }
   }
 }

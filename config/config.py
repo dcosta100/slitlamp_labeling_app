@@ -80,6 +80,7 @@ LABELS_DIR = DATA_DIR / "labels"
 USERS_DIR = DATA_DIR / "users"
 LOGS_DIR = DATA_DIR / "logs"
 BACKUPS_DIR = DATA_DIR / "backups"
+ROUTES_DIR = DATA_DIR / "routes"
 
 # Create directories if they don't exist
 LABELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -266,11 +267,19 @@ ROUTE_STRATEGIES = {
     "forward": "Start from beginning",
     "backward": "Start from end",
     "middle_out": "Start from middle",
-    "random": "Random order (seeded by user)"
+    "random": "Random order (seeded by user)",
+    "cataract_focus": "Cataract focus - 10k images with a cataract signal (AI pre-label or exam diagnosis)",
 }
 
 # Set of all "sixth" strategy names, mapped to their part number (1-6)
 PRELABEL_SIXTH_STRATEGIES = {f"prelabel_{k}_6": k for k in range(1, 7)}
+
+# Strategies whose route is a fixed, ordered list of image keys stored in a file
+# (built by a script in scripts/). These images can fall outside the default
+# dataset filter, so a labeler on one of these routes loads the full dataset.
+PATH_LIST_ROUTES = {
+    "cataract_focus": ROUTES_DIR / "cataract_focus.json",
+}
 
 # ======================================================
 # Application settings

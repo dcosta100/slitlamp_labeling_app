@@ -546,6 +546,34 @@ class DataLoader:
             self.merge_datasets()
         return len(self.merged_df) if self.merged_df is not None else 0
     
+    def _route_from_path_list(self, strategy):
+        """Indices for a route stored as an ordered list of image keys.
+
+        Keys missing from the loaded dataset are dropped with a warning; the
+        labeler should be on the ALL filter so that none are missing.
+        """
+        import json
+        from config.config import PATH_LIST_ROUTES
+
+        route_file = PATH_LIST_ROUTES[strategy]
+        if not route_file.exists():
+            print(f"   ❌ Route file {route_file} not found - run the script that builds it")
+            return []
+
+        with open(route_file, 'r', encoding='utf-8') as f:
+            keys = json.load(f).get('image_keys') or []
+
+        self.ensure_image_paths()
+        # The dataset can repeat an image on several rows; the first one wins.
+        paths = self.merged_df['normalized_path']
+        index_of = dict(zip(paths[~paths.duplicated()], paths.index[~paths.duplicated()]))
+
+        route = [index_of[k] for k in keys if k in index_of]
+        missing = len(keys) - len(route)
+        print(f"   Route '{strategy}': {len(route):,} images from {route_file.name}"
+              + (f" ({missing:,} not in the loaded dataset)" if missing else ""))
+        return route
+
     def create_route(self, total_images, strategy="forward", username=None):
         """
         Create a route/sequence for labeling based on strategy
@@ -559,7 +587,7 @@ class DataLoader:
             List of indices in the desired order
         """
         import numpy as np
-        from config.config import PRELABEL_SIXTH_STRATEGIES
+        from config.config import PATH_LIST_ROUTES, PRELABEL_SIXTH_STRATEGIES
 
         indices = list(range(total_images))
 
@@ -574,6 +602,10 @@ class DataLoader:
             ["prelabel_first", "prelabel_first_third", "prelabel_second_third", "prelabel_last_third"]
             + list(PRELABEL_SIXTH_STRATEGIES.keys())
         )
+
+        # ── Fixed image lists built by a script ────────────────
+        if strategy in PATH_LIST_ROUTES:
+            return self._route_from_path_list(strategy)
 
         # ── Strategies that work with AI prelabels ──────────────
         if strategy in prelabel_strategies:

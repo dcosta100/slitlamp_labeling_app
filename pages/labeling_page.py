@@ -218,10 +218,21 @@ def show():
     """, unsafe_allow_html=True)
     
     # Initialize
+    # A fixed image-list route (e.g. cataract_focus) can include images outside
+    # the default filter, so those labelers always get the full dataset. Checked
+    # on every run because an admin can reassign the route mid-session.
+    from config.config import DEFAULT_DATASET_FILTER, PATH_LIST_ROUTES
+    if get_user_route_strategy(st.session_state.username) in PATH_LIST_ROUTES:
+        wanted_filter = "ALL"
+    else:
+        wanted_filter = st.session_state.get('dataset_filter', DEFAULT_DATASET_FILTER)
+    if 'data_loader' in st.session_state and st.session_state.data_loader.filter_mode != wanted_filter:
+        del st.session_state.data_loader
+        st.session_state.pop('route_indices', None)
+
     if 'data_loader' not in st.session_state:
         st.session_state.data_loader = DataLoader()
-        from config.config import DEFAULT_DATASET_FILTER
-        st.session_state.data_loader.filter_mode = st.session_state.get('dataset_filter', DEFAULT_DATASET_FILTER)
+        st.session_state.data_loader.filter_mode = wanted_filter
         with st.spinner("Loading datasets..."):
             success, message = st.session_state.data_loader.merge_datasets()
             if not success:
