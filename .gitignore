@@ -80,3 +80,23 @@ dmypy.json
 # Ignorar todos os labels EXCETO AI_prelabel
 data/labels/*_labels.json
 !data/labels/AI_prelabel_labels.json
+
+# Session activity logs and import backups stay local, like the labels
+data/logs/
+data/backups/
+
+# Crash-safety artefacts written next to the label files
+data/labels/*.bak
+data/labels/*.tmp
+
+# ============================================================
+# PHI - never commit anything that can identify a patient
+# ============================================================
+# Prospective study data (names, MRNs, dates of birth) and EHR
+# screenshots. *.csv and *.xlsx are already ignored above, but these
+# are spelled out so the intent survives any future .gitignore edit.
+prospective/
+docs/screenshots_ehr.pdf
+*_ehr*.pdf
+*screenshot*.pdf
+*.pdf

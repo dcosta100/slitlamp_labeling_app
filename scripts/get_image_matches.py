@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 
 # Add parent directory to path if needed
-sys.path.append(str(Path(__file__).parent))
+sys.path.append(str(Path(__file__).parent.parent))
 
 from config import (
     DIAGNOSIS_PATH,
