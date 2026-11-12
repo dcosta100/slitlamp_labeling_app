@@ -2,10 +2,14 @@
 Aggregation helpers for the admin dashboard.
 
 Everything here reads the label files and session logs that live in data/ and
-turns them into the per-week numbers shown on the Weekly Report tab. Label
-activity is derived from the `labeled_at` timestamp stored on every label, so
-the weekly report works retroactively - it does not depend on session logging
-having been enabled at the time.
+turns them into the numbers shown on the Weekly Report and Labeler tabs. Label
+activity is derived from the timestamps stored on every label, so the reports
+work retroactively - they do not depend on session logging having been enabled
+at the time.
+
+A label is counted as *new* on the date it was first saved and every later
+save counts as an *edit*. `labeled_at` alone is not enough for that: it is
+overwritten on every edit, and the earlier saves live in `edit_history`.
 """
 
 import json
@@ -20,10 +24,12 @@ from utils.session_logger import sessions_dataframe
 NON_LABELER_USERS = ("AI_prelabel",)
 
 LABEL_COLUMNS = [
-    "user", "image_key", "image_path", "labeled_at", "date", "laterality",
-    "quality", "illumination", "studyid", "n_conditions", "conditions",
-    "is_edit", "n_edits",
+    "user", "image_key", "image_path", "first_labeled_at", "first_date",
+    "labeled_at", "date", "laterality", "quality", "illumination", "studyid",
+    "n_conditions", "conditions", "cataract", "is_edit", "n_edits",
 ]
+
+EVENT_COLUMNS = ["user", "image_key", "saved_at", "date", "kind"]
 
 
 def list_labeler_files():
@@ -44,40 +50,124 @@ def list_labeler_files():
     return found
 
 
-def labels_dataframe():
-    """One row per saved label, across all labelers."""
-    rows = []
+def _iter_labels(usernames=None):
+    """(username, image_key, label) for every label in the labeler files."""
     for username, path in list_labeler_files():
+        if usernames is not None and username not in usernames:
+            continue
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except (OSError, json.JSONDecodeError):
             continue
-
         for image_key, label in (data.get("labels") or {}).items():
-            conditions = label.get("conditions") or {}
-            rows.append({
-                "user": username,
-                "image_key": image_key,
-                "image_path": label.get("image_path"),
-                "labeled_at": label.get("labeled_at"),
-                "laterality": label.get("laterality"),
-                "quality": label.get("quality"),
-                "illumination": label.get("illumination"),
-                "studyid": (label.get("metadata") or {}).get("maskedid_studyid"),
-                "n_conditions": len(conditions),
-                "conditions": ", ".join(sorted(conditions)) if conditions else "None",
-                "is_edit": bool(label.get("is_edit")),
-                "n_edits": len(label.get("edit_history") or []),
-            })
+            yield username, image_key, label
+
+
+def _save_times(label):
+    """Every save of a label, oldest first: the edit history, then the current one."""
+    times = [h.get("labeled_at") for h in (label.get("edit_history") or [])]
+    times.append(label.get("labeled_at"))
+    return sorted(t for t in times if t)
+
+
+def _cataract_summary(conditions):
+    cataract = conditions.get("Cataract")
+    if not cataract:
+        return ""
+    return " ".join(v for v in (cataract.get("type"), cataract.get("severity")) if v)
+
+
+def labels_dataframe(usernames=None):
+    """One row per saved label, across all labelers (or only `usernames`)."""
+    rows = []
+    for username, image_key, label in _iter_labels(usernames):
+        conditions = label.get("conditions") or {}
+        times = _save_times(label)
+        rows.append({
+            "user": username,
+            "image_key": image_key,
+            "image_path": label.get("image_path"),
+            "first_labeled_at": times[0] if times else None,
+            "labeled_at": label.get("labeled_at"),
+            "laterality": label.get("laterality"),
+            "quality": label.get("quality"),
+            "illumination": label.get("illumination"),
+            "studyid": (label.get("metadata") or {}).get("maskedid_studyid"),
+            "n_conditions": len(conditions),
+            "conditions": ", ".join(sorted(conditions)) if conditions else "None",
+            "cataract": _cataract_summary(conditions),
+            "is_edit": bool(label.get("is_edit")),
+            "n_edits": len(label.get("edit_history") or []),
+        })
 
     if not rows:
         return pd.DataFrame(columns=LABEL_COLUMNS)
 
     df = pd.DataFrame(rows)
-    df["labeled_at"] = pd.to_datetime(df["labeled_at"], errors="coerce")
+    for column in ("labeled_at", "first_labeled_at"):
+        df[column] = pd.to_datetime(df[column], errors="coerce")
     df["date"] = df["labeled_at"].dt.date
+    df["first_date"] = df["first_labeled_at"].dt.date
     return df[LABEL_COLUMNS]
+
+
+def save_events_dataframe(usernames=None):
+    """One row per save: the first save of an image is "new", the rest "edit"."""
+    rows = []
+    for username, image_key, label in _iter_labels(usernames):
+        for i, saved_at in enumerate(_save_times(label)):
+            rows.append({
+                "user": username,
+                "image_key": image_key,
+                "saved_at": saved_at,
+                "kind": "new" if i == 0 else "edit",
+            })
+
+    if not rows:
+        return pd.DataFrame(columns=EVENT_COLUMNS)
+
+    df = pd.DataFrame(rows)
+    df["saved_at"] = pd.to_datetime(df["saved_at"], errors="coerce")
+    df["date"] = df["saved_at"].dt.date
+    return df[EVENT_COLUMNS]
+
+
+def _in_window(df, column, start, end):
+    """Rows of `df` whose `column` falls in [start, end)."""
+    if df.empty:
+        return df
+    return df[df[column].notna() & (df[column] >= start) & (df[column] < end)]
+
+
+def first_save_vs_ai(user, ai_labels):
+    """Per label: did the labeler's FIRST save keep the AI suggestion unchanged?
+
+    Compares laterality and the cataract type/severity of the first save with
+    the AI pre-label for the same image. A high match rate on images where the
+    AI is known to be unreliable (e.g. laterality in OU studies) suggests the
+    pre-filled form is being saved without review.
+
+    `ai_labels` maps normalized image keys to AI pre-label records.
+    """
+    from utils.label_manager import normalize_image_path
+
+    def cataract(record):
+        c = (record.get("conditions") or {}).get("Cataract") or {}
+        return (c.get("type"), c.get("severity"))
+
+    rows = []
+    for _, image_key, label in _iter_labels([user]):
+        ai = ai_labels.get(normalize_image_path(image_key))
+        if not ai:
+            continue
+        first = (label.get("edit_history") or [label])[0]
+        rows.append({
+            "image_key": image_key,
+            "laterality_same": first.get("laterality") == ai.get("laterality"),
+            "cataract_same": cataract(first) == cataract(ai),
+        })
+    return pd.DataFrame(rows, columns=["image_key", "laterality_same", "cataract_same"])
 
 
 def file_freshness():
@@ -128,6 +218,11 @@ def format_week(start, end):
 # Weekly aggregation
 # ======================================================
 
+USER_WEEK_COLUMNS = [
+    "Week", "week_start", "New labels", "Edits", "Days active", "Sessions",
+    "Active hours", "Labels/hour", "Non Usable",
+]
+
 SUMMARY_COLUMNS = [
     "User", "Labels", "Days active", "Sessions", "Active hours", "Labels/hour",
     "Usable", "Non Usable", "Edits", "Total (all time)", "Route size",
@@ -135,10 +230,15 @@ SUMMARY_COLUMNS = [
 ]
 
 
-def weekly_summary(start, end, labels_df=None, sessions_df=None):
-    """Per-user metrics for the window [start, end)."""
+def weekly_summary(start, end, labels_df=None, sessions_df=None, events_df=None):
+    """Per-user metrics for the window [start, end).
+
+    "Labels" counts images first labeled in the window; re-saving an image
+    counts under "Edits" and does not move the label out of its original week.
+    """
     labels_df = labels_dataframe() if labels_df is None else labels_df
     sessions_df = sessions_dataframe() if sessions_df is None else sessions_df
+    events_df = save_events_dataframe() if events_df is None else events_df
 
     users = set()
     if not labels_df.empty:
@@ -150,18 +250,13 @@ def weekly_summary(start, end, labels_df=None, sessions_df=None):
     for user in sorted(users):
         user_labels = labels_df[labels_df["user"] == user] if not labels_df.empty else labels_df
         user_sessions = sessions_df[sessions_df["user"] == user] if not sessions_df.empty else sessions_df
+        user_events = events_df[events_df["user"] == user] if not events_df.empty else events_df
 
-        in_week = user_labels[
-            user_labels["labeled_at"].notna()
-            & (user_labels["labeled_at"] >= start)
-            & (user_labels["labeled_at"] < end)
-        ] if not user_labels.empty else user_labels
+        new_in_week = _in_window(user_labels, "first_labeled_at", start, end)
+        events_in_week = _in_window(user_events, "saved_at", start, end)
+        sessions_in_week = _in_window(user_sessions, "started_at", start, end)
 
-        sessions_in_week = user_sessions[
-            (user_sessions["started_at"] >= start) & (user_sessions["started_at"] < end)
-        ] if not user_sessions.empty else user_sessions
-
-        n_labels = len(in_week)
+        n_labels = len(new_in_week)
         active_hours = (
             float(sessions_in_week["active_minutes"].sum()) / 60
             if not sessions_in_week.empty else 0.0
@@ -174,13 +269,13 @@ def weekly_summary(start, end, labels_df=None, sessions_df=None):
         rows.append({
             "User": user,
             "Labels": n_labels,
-            "Days active": int(in_week["date"].nunique()) if n_labels else 0,
+            "Days active": int(events_in_week["date"].nunique()) if not events_in_week.empty else 0,
             "Sessions": len(sessions_in_week),
             "Active hours": round(active_hours, 1),
             "Labels/hour": round(n_labels / active_hours, 1) if active_hours >= 0.1 else None,
-            "Usable": int((in_week["quality"] == "Usable").sum()) if n_labels else 0,
-            "Non Usable": int((in_week["quality"] == "Non Usable").sum()) if n_labels else 0,
-            "Edits": int(in_week["is_edit"].sum()) if n_labels else 0,
+            "Usable": int((new_in_week["quality"] == "Usable").sum()) if n_labels else 0,
+            "Non Usable": int((new_in_week["quality"] == "Non Usable").sum()) if n_labels else 0,
+            "Edits": int((events_in_week["kind"] == "edit").sum()) if not events_in_week.empty else 0,
             "Total (all time)": total_all_time,
             "Route size": route_size,
             "Progress %": round(100 * total_all_time / route_size, 1) if route_size else None,
@@ -196,21 +291,55 @@ def weekly_summary(start, end, labels_df=None, sessions_df=None):
     return pd.DataFrame(rows, columns=SUMMARY_COLUMNS).sort_values("Labels", ascending=False)
 
 
+def user_weekly_history(user, labels_df=None, sessions_df=None, events_df=None, reference=None):
+    """One row per week for a single labeler, from their first activity to now."""
+    labels_df = labels_dataframe([user]) if labels_df is None else labels_df[labels_df["user"] == user]
+    sessions_df = sessions_dataframe([user]) if sessions_df is None else sessions_df[sessions_df["user"] == user]
+    events_df = save_events_dataframe([user]) if events_df is None else events_df[events_df["user"] == user]
+
+    starts = []
+    if not events_df.empty and events_df["saved_at"].notna().any():
+        starts.append(events_df["saved_at"].min())
+    if not sessions_df.empty:
+        starts.append(sessions_df["started_at"].min())
+    if not starts:
+        return pd.DataFrame(columns=USER_WEEK_COLUMNS)
+
+    first_week = week_start(min(starts).to_pydatetime())
+    n_weeks = (week_start(reference) - first_week).days // 7 + 1
+    rows = []
+    for start, end in recent_weeks(count=max(1, n_weeks), reference=reference):
+        summary = weekly_summary(start, end, labels_df, sessions_df, events_df)
+        row = summary[summary["User"] == user]
+        if row.empty:
+            continue
+        row = row.iloc[0]
+        rows.append({
+            "Week": format_week(start, end),
+            "week_start": start,
+            "New labels": row["Labels"],
+            "Edits": row["Edits"],
+            "Days active": row["Days active"],
+            "Sessions": row["Sessions"],
+            "Active hours": row["Active hours"],
+            "Labels/hour": row["Labels/hour"],
+            "Non Usable": row["Non Usable"],
+        })
+    return pd.DataFrame(rows, columns=USER_WEEK_COLUMNS)
+
+
 def daily_breakdown(start, end, labels_df=None):
     """Labels per day per user inside the window, for the weekly chart."""
     labels_df = labels_dataframe() if labels_df is None else labels_df
     if labels_df.empty:
         return pd.DataFrame(columns=["date", "user", "labels"])
 
-    in_week = labels_df[
-        labels_df["labeled_at"].notna()
-        & (labels_df["labeled_at"] >= start)
-        & (labels_df["labeled_at"] < end)
-    ]
+    in_week = _in_window(labels_df, "first_labeled_at", start, end)
     if in_week.empty:
         return pd.DataFrame(columns=["date", "user", "labels"])
 
-    return (in_week.groupby(["date", "user"]).size()
+    return (in_week.groupby(["first_date", "user"]).size()
+            .rename_axis(["date", "user"])
             .rename("labels").reset_index().sort_values("date"))
 
 

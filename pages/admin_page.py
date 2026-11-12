@@ -3,6 +3,7 @@ Admin dashboard page
 
 Tabs, in the order an admin normally needs them:
     Weekly Report  - what to send to colleagues every week
+    Labeler        - everything about one labeler: progress, weeks, sessions, labels
     Sessions       - when each labeler worked, and for how long
     Import         - load the files labelers send in
     Statistics     - cumulative distributions across the whole dataset
@@ -20,15 +21,18 @@ import streamlit as st
 
 from config.config import BACKUPS_DIR, LABELS_DIR, LOGS_DIR, ROUTE_STRATEGIES
 from utils.auth import create_user, get_all_users, update_user_route_strategy
-from utils.label_manager import LabelManager
+from utils.label_manager import LabelManager, normalize_image_path
 from utils.reporting import (
     daily_breakdown,
     file_freshness,
+    first_save_vs_ai,
     format_week,
     labels_dataframe,
     list_labeler_files,
     projection,
     recent_weeks,
+    save_events_dataframe,
+    user_weekly_history,
     weekly_report_markdown,
     weekly_summary,
 )
@@ -42,6 +46,7 @@ def show():
 
     tabs = st.tabs([
         "📅 Weekly Report",
+        "👤 Labeler",
         "⏱️ Sessions",
         "📥 Import",
         "📈 Statistics",
@@ -52,14 +57,16 @@ def show():
     with tabs[0]:
         show_weekly_report()
     with tabs[1]:
-        show_sessions()
+        show_labeler()
     with tabs[2]:
-        show_import()
+        show_sessions()
     with tabs[3]:
-        show_statistics()
+        show_import()
     with tabs[4]:
-        show_user_management()
+        show_statistics()
     with tabs[5]:
+        show_user_management()
+    with tabs[6]:
         show_label_review()
 
 
@@ -74,6 +81,7 @@ def show_weekly_report():
 
     labels_df = labels_dataframe()
     sessions_df = sessions_dataframe()
+    events_df = save_events_dataframe()
 
     if labels_df.empty:
         st.info("No labels found yet. Import label files on the **Import** tab.")
@@ -97,9 +105,9 @@ def show_weekly_report():
     start, end = weeks[selected]
     previous_start, previous_end = weeks[selected + 1] if selected + 1 < len(weeks) else (None, None)
 
-    summary = weekly_summary(start, end, labels_df, sessions_df)
+    summary = weekly_summary(start, end, labels_df, sessions_df, events_df)
     previous_summary = (
-        weekly_summary(previous_start, previous_end, labels_df, sessions_df)
+        weekly_summary(previous_start, previous_end, labels_df, sessions_df, events_df)
         if previous_start else None
     )
 
@@ -192,9 +200,9 @@ def _weekly_trend(labels_df, weeks):
     rows = []
     for start, end in reversed(weeks):
         in_week = labels_df[
-            labels_df["labeled_at"].notna()
-            & (labels_df["labeled_at"] >= start)
-            & (labels_df["labeled_at"] < end)
+            labels_df["first_labeled_at"].notna()
+            & (labels_df["first_labeled_at"] >= start)
+            & (labels_df["first_labeled_at"] < end)
         ]
         counts = in_week.groupby("user").size() if not in_week.empty else pd.Series(dtype=int)
         for user in sorted(labels_df["user"].dropna().unique()):
@@ -204,6 +212,175 @@ def _weekly_trend(labels_df, weeks):
                 "labels": int(counts.get(user, 0)),
             })
     return pd.DataFrame(rows)
+
+
+# ======================================================
+# One labeler
+# ======================================================
+
+@st.cache_data(show_spinner=False)
+def _ai_prelabels(mtime):
+    """AI pre-labels keyed by normalized path. `mtime` only invalidates the cache."""
+    path = LABELS_DIR / "AI_prelabel_labels.json"
+    with open(path, "r", encoding="utf-8") as f:
+        labels = json.load(f).get("labels") or {}
+    return {normalize_image_path(k): v for k, v in labels.items()}
+
+
+def show_labeler():
+    """Everything about one labeler on one screen."""
+
+    st.markdown("## 👤 Labeler")
+
+    users = get_all_users()
+    labeler_names = {u for u, info in users.items() if info.get("role") != "admin"}
+    labeler_names |= {u for u, _ in list_labeler_files()}
+    if not labeler_names:
+        st.info("No labelers yet.")
+        return
+
+    user = st.selectbox("Labeler", sorted(labeler_names), key="labeler_tab_user")
+    labels_df = labels_dataframe([user])
+    events_df = save_events_dataframe([user])
+    sessions_df = sessions_dataframe([user])
+    strategy = users.get(user, {}).get("route_strategy", "-")
+
+    if labels_df.empty and sessions_df.empty:
+        st.info(f"No labels or session logs for **{user}** on this machine. Import "
+                f"`{user}_labels.json` and `{user}_sessions.jsonl` on the **Import** tab.")
+        return
+
+    # ---- headline ----------------------------------------------------------
+    route_size = (int(sessions_df["route_len"].dropna().iloc[0])
+                  if not sessions_df.empty and sessions_df["route_len"].notna().any() else None)
+    total = len(labels_df)
+    n_edits = int((events_df["kind"] == "edit").sum()) if not events_df.empty else 0
+    active_hours = float(sessions_df["active_minutes"].sum()) / 60 if not sessions_df.empty else 0.0
+
+    times = []
+    if not events_df.empty:
+        times += [events_df["saved_at"].min(), events_df["saved_at"].max()]
+    if not sessions_df.empty:
+        times += [sessions_df["started_at"].min(), sessions_df["last_seen"].max()]
+    times = [t for t in times if not pd.isna(t)]
+
+    caption = f"Route: `{strategy}` - {ROUTE_STRATEGIES.get(strategy, '')}"
+    if times:
+        caption += f"  ·  First activity: {min(times):%d %b %Y}  ·  Last activity: {max(times):%d %b %Y %H:%M}"
+    st.caption(caption)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        st.metric("Labels", f"{total:,}",
+                  help="Distinct images labeled. Re-saving an image does not add to this.")
+    with c2:
+        st.metric("Route progress",
+                  f"{100 * total / route_size:.1f}%" if route_size else "—",
+                  help=(f"{total:,} of {route_size:,} images" if route_size else
+                        "Route size is recorded by session logging."))
+    with c3:
+        st.metric("Active hours", f"{active_hours:.1f}" if active_hours else "—",
+                  help="Time between actions less than 15 minutes apart, from the session log.")
+    with c4:
+        st.metric("Labels/hour", f"{total / active_hours:.1f}" if active_hours >= 0.1 else "—",
+                  help="All-time labels over all-time active hours. Labels made before "
+                       "session logging existed inflate this.")
+    with c5:
+        st.metric("Edits", f"{n_edits:,}", help="Saves of an image that was already labeled.")
+
+    if route_size:
+        st.progress(min(1.0, total / route_size), text=f"{total:,} / {route_size:,} images")
+
+    # ---- week by week ------------------------------------------------------
+    st.markdown("### Week by week")
+    history = user_weekly_history(user, labels_df, sessions_df, events_df)
+    if history.empty:
+        st.info("No dated activity yet.")
+    else:
+        chart = history.sort_values("week_start").melt(
+            id_vars=["week_start"], value_vars=["New labels", "Edits"],
+            var_name="Kind", value_name="Saves")
+        fig = px.bar(chart, x="week_start", y="Saves", color="Kind", barmode="stack",
+                     title="New labels and edits per week")
+        fig.update_layout(xaxis_title="Week starting", yaxis_title="")
+        st.plotly_chart(fig, use_container_width=True)
+        st.dataframe(history.drop(columns=["week_start"]), use_container_width=True, hide_index=True)
+
+    # ---- sessions ----------------------------------------------------------
+    st.markdown("### Sessions")
+    if sessions_df.empty:
+        st.caption(f"No session log. Ask {user} to send `data/logs/{user}_sessions.jsonl`.")
+    else:
+        table = sessions_df.copy()
+        table["started_at"] = table["started_at"].dt.strftime("%Y-%m-%d %H:%M")
+        table["last_seen"] = table["last_seen"].dt.strftime("%H:%M")
+        table = table.rename(columns={
+            "started_at": "Login", "last_seen": "Last seen", "active_minutes": "Active (min)",
+            "saves": "Saves", "net_new": "New labels", "position": "Route position",
+            "ended_by": "Ended by",
+        })
+        st.dataframe(table[["Login", "Last seen", "Active (min)", "Saves", "New labels",
+                            "Route position", "Ended by"]],
+                     use_container_width=True, hide_index=True)
+
+    if labels_df.empty:
+        return
+
+    # ---- what was labeled --------------------------------------------------
+    st.markdown("### What was labeled")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        cataract = labels_df["cataract"].replace("", "(not assessed)").value_counts()
+        fig = px.bar(x=cataract.values, y=cataract.index, orientation="h", title="Cataract")
+        fig.update_layout(xaxis_title="Labels", yaxis_title="",
+                          yaxis={"categoryorder": "total ascending"})
+        st.plotly_chart(fig, use_container_width=True)
+    with col_b:
+        conditions = labels_df["conditions"].str.split(", ").explode().value_counts()
+        fig = px.bar(x=conditions.values, y=conditions.index, orientation="h", title="Conditions")
+        fig.update_layout(xaxis_title="Labels", yaxis_title="",
+                          yaxis={"categoryorder": "total ascending"})
+        st.plotly_chart(fig, use_container_width=True)
+
+    col_c, col_d, col_e = st.columns(3)
+    for column, field in ((col_c, "quality"), (col_d, "laterality"), (col_e, "illumination")):
+        with column:
+            counts = labels_df[field].fillna("Not specified").value_counts()
+            counts = counts.rename_axis(field.title()).rename("Labels").reset_index()
+            st.dataframe(counts, use_container_width=True, hide_index=True)
+
+    # ---- pre-fill check ----------------------------------------------------
+    ai_path = LABELS_DIR / "AI_prelabel_labels.json"
+    if ai_path.exists():
+        vs_ai = first_save_vs_ai(user, _ai_prelabels(ai_path.stat().st_mtime))
+        if not vs_ai.empty:
+            st.markdown("### First save vs AI suggestion")
+            st.caption("How often the first save kept the AI pre-label unchanged. The AI label "
+                       "is per study, so in OU studies its laterality is wrong for about half the "
+                       "photos: a rate near 100% there means the form is being saved unreviewed.")
+            m1, m2, m3 = st.columns(3)
+            with m1:
+                st.metric("Images with an AI suggestion", f"{len(vs_ai):,}")
+            with m2:
+                st.metric("Laterality kept", f"{100 * vs_ai['laterality_same'].mean():.0f}%")
+            with m3:
+                st.metric("Cataract kept", f"{100 * vs_ai['cataract_same'].mean():.0f}%")
+
+    # ---- labels ------------------------------------------------------------
+    st.markdown("### Labels")
+    table = labels_df.sort_values("labeled_at", ascending=False).copy()
+    table["photo"] = table["image_path"].fillna("").map(lambda p: p.replace("/", "\\").split("\\")[-1])
+    table = table.rename(columns={
+        "first_labeled_at": "First saved", "labeled_at": "Last saved", "photo": "Photo",
+        "laterality": "Laterality", "quality": "Quality", "illumination": "Illumination",
+        "cataract": "Cataract", "conditions": "Conditions", "n_edits": "Edits",
+    })
+    columns = ["Last saved", "First saved", "Photo", "Laterality", "Quality", "Illumination",
+               "Cataract", "Conditions", "Edits"]
+    st.dataframe(table[columns], use_container_width=True, hide_index=True)
+    st.download_button(f"📥 Download {user}'s labels (.csv)",
+                       data=table[columns + ["image_key"]].to_csv(index=False),
+                       file_name=f"{user}_labels.csv", mime="text/csv")
 
 
 # ======================================================
